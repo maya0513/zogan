@@ -56,6 +56,7 @@
     "deno:jsr": "deno task deno:jsr",
     "deno:e2e": "pnpm --filter @zogan/deno-example e2e",
     "deno:contract": "node scripts/check-deno-contract.mjs",
+    "vite:peer:check": "node scripts/check-vite-peer.mjs",
     "demo:build": "pnpm run build && pnpm --filter @zogan/shop build",
     "demo:test": "pnpm --filter @zogan/shop test",
     "demo:e2e": "pnpm --filter @zogan/shop e2e",
@@ -90,7 +91,7 @@
     "@preact/signals": ">=2.11.0 <3",
     "hono": ">=4.13.0 <5",
     "preact": ">=10.29.8 <11",
-    "vite": "^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0"
+    "vite": "^8.0.0"
   },
   "peerDependenciesMeta": {
     "vite": {

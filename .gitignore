@@ -29,10 +29,6 @@ examples/deno/.vite/
 .env.*
 !.env.example
 
-# Nix build links
-result
-result-*
-
 # Editors and operating systems
 .idea/
 .vscode/

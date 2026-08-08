@@ -34,6 +34,7 @@ jobs:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm run site:e2e
       - run: pnpm run demo:e2e
@@ -64,11 +65,8 @@ jobs:
       - run: just deno-ci
 
   vite-peer:
+    name: Vite 8 peer
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        vite: [5, 6, 7, 8]
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
@@ -77,14 +75,5 @@ jobs:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm add --workspace-root --save-dev vite@${{ matrix.vite }}
       - run: pnpm run build
-      - run: pnpm exec vp test --run tests/vite
-
-  nix:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: cachix/install-nix-action@v31
-      - run: nix flake check --all-systems
-      - run: nix develop --command just ci
+      - run: pnpm run vite:peer:check

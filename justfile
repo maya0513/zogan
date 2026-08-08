@@ -63,6 +63,7 @@ deno-ci:
     deno task deno:check
     deno task deno:test
     pnpm run package:check:deno
+    deno task deno:example:build
     pnpm run deno:contract
     deno task deno:jsr
     pnpm run deno:e2e

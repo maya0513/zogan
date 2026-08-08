@@ -1,4 +1,4 @@
-import { bench, beforeAll, describe } from "vite-plus/test";
+import { bench, beforeAll, describe } from "vitest";
 import { fragmentTargets } from "../src/client/fragments";
 import { parseHTMLFragment, replaceRange } from "../src/client/dom";
 import { __resetStores, clientStore, mergeSnapshots } from "../src/client/store";

@@ -19,7 +19,7 @@ Cache enforcement, middleware safety boundaries, Store reconciliation, Fragment 
 
 Command: `pnpm run bench`
 
-Environment: Node 26.6.0 from nixpkgs revision `e72e4f2` dated 2026-08-04. Files run serially; the comparison uses the median of three run medians and fails when it is more than 20% slower than the committed baseline.
+Environment: Node 26.6.0 on Linux x64. Files run serially; the comparison uses the median of three run medians and fails when it is more than 20% slower than the committed baseline.
 
 | Benchmark                             |      Median |
 | ------------------------------------- | ----------: |
@@ -49,7 +49,6 @@ The same command packs the actual tarball, runs publint and Are The Types Wrong,
 - Root unit, contract, and regression tests run with Vitest.
 - Workers/D1 integration tests run in Workerd with isolated D1 storage.
 - Playwright runs Chromium with JavaScript enabled and disabled.
-- `nix flake check --all-systems` evaluates every supported flake system.
 - `wrangler deploy --dry-run` validates the demo bundle without deploying it.
 
 ## Deno and JSR verification

@@ -168,7 +168,7 @@ export default defineConfig({
 - Hono 4.13以降
 - Preact 10.29以降
 - `@preact/signals` 2.11以降
-- `zogan/vite`を使う場合はVite 5–8
+- `zogan/vite`を使う場合はVite 8
 - JSRパッケージとDenoサンプルはDeno 2.9以降
 - 開発とパッケージングにはNode.js 24.11以降
 - Honoが対応する、Web標準に基づいたサーバーランタイム

@@ -33,7 +33,7 @@
     "deno:example:build": "deno task --config examples/deno/deno.json build",
     "deno:example:dev": "deno task --config examples/deno/deno.json dev",
     "deno:example:start": "deno task --config examples/deno/deno.json start",
-    "deno:jsr": "deno doc --lint src/server/index.ts src/client/index.ts src/vite/index.ts 2>&1 | node scripts/check-deno-doc.mjs && deno publish --dry-run --allow-slow-types",
+    "deno:jsr": "deno doc --lint src/server/index.ts src/client/index.ts src/vite/index.ts 2>&1 | node scripts/check-deno-doc.mjs && deno publish --dry-run --allow-dirty --allow-slow-types",
     "deno:ci": "deno task deno:check && deno task deno:example:build && deno task deno:test && deno task deno:jsr"
   },
   "publish": {

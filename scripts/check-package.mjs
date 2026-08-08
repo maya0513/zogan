@@ -73,5 +73,8 @@ const manifest = JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf
 if (manifest.peerDependenciesMeta?.vite?.optional !== true) {
   throw new Error("packed manifest must keep Vite as an optional peer");
 }
+if (manifest.peerDependencies?.vite !== "^8.0.0") {
+  throw new Error("packed manifest must support Vite 8 only");
+}
 console.log(`package smoke passed: ${filename}`);
 rmSync(temporary, { recursive: true, force: true });

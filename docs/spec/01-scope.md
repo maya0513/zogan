@@ -12,7 +12,7 @@
 
 判断基準は、サーバーレンダリングされたHTMLに更新境界を追加するために必要かどうかです。react-router互換を目標に据えて対象範囲を広げません。
 
-**前提スタック**：Hono / Preact 10.x / `@preact/signals`（必須peer）/ Vite（任意）/ Node.jsまたはDeno
+**前提スタック**：Hono / Preact 10.x / `@preact/signals`（必須peer）/ Vite 8（任意）/ Node.jsまたはDeno
 
 ---
 

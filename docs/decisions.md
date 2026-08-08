@@ -16,7 +16,7 @@ The three public entries are `zogan`, `zogan/client`, and `zogan/vite`. They exp
 
 - `hono`, `preact`, and `@preact/signals` are mandatory peers and development dependencies. The host application and zogan must use compatible shared runtime instances and types.
 - `preact-render-to-string` is a normal dependency because zogan imports it internally to implement SSR; applications should not need to install it directly.
-- Vite is an optional peer. Only consumers of `zogan/vite` require it.
+- Vite 8 is an optional peer. Only consumers of `zogan/vite` require it; earlier Vite majors are outside the compatibility contract.
 - Tooling versions are pinned through `package.json` and `pnpm-lock.yaml`; pre-release versions are not selected.
 
 ## Rendering markers
@@ -41,13 +41,9 @@ Concurrent refreshes of the same canonical fragment URL share one request and fa
 
 Client-only reachability is based on lexer output and the Vite module graph, including named and namespace imports, dynamic imports, and re-export paths. Virtual island entries resolve from Vite's root, use absolute normalized paths internally, and reject ambiguous same-name files.
 
-## Nix support
-
-The flake uses the locked nixpkgs revision and `nodejs-slim_26`. Supported systems are `x86_64-linux`, `aarch64-linux`, and `aarch64-darwin`; Intel macOS is intentionally outside the Nix matrix. pnpm is overridden through its `nodejs-slim` input to avoid the deprecated override warning.
-
 ## Performance gate
 
-Vitest benchmarks cover SSR, partial extraction, snapshot scanning, DOM replacement, Store merge, and fragment fan-out. The committed baseline is measured on Node 26 from the locked Nix shell. A median regression greater than 20% fails comparison. This tolerance is intended to catch structural regressions while avoiding ordinary shared-runner noise.
+Vitest benchmarks cover SSR, partial extraction, snapshot scanning, DOM replacement, Store merge, and fragment fan-out. The committed baseline is measured on Node 26. A median regression greater than 20% fails comparison. This tolerance is intended to catch structural regressions while avoiding ordinary shared-runner noise.
 
 Published gzip limits are 12 KiB for the client, 7 KiB for the server, and 5 KiB for the Vite plugin.
 
@@ -75,4 +71,4 @@ The Hono methods and request fields are intentionally expressed as module augmen
 
 Documentation linting still executes `deno doc --lint` across all three entries. Deno 2.9 reports peer-owned Hono, Preact, Signals, and Vite names as private because they are not re-exported from zogan. Re-exporting those dependencies would violate the deliberately narrow public surface. A strict wrapper accepts only the enumerated `private-type-ref` diagnostics for peer types and fails on missing documentation, missing return types, internal zogan types, or any new diagnostic.
 
-Deno quality checks live in a separate `deno-ci` job and `just deno-ci`; they are not added to the Nix or Node `just ci` path. Deno Deploy uses a dynamic runtime configured in the root manifest and the new `deno deploy` CLI. Its GitHub environment and token are isolated from both Cloudflare deployments.
+Deno quality checks live in a separate `deno-ci` job and `just deno-ci`; they are not added to the Node `just ci` path. Deno Deploy uses a dynamic runtime configured in the root manifest and the new `deno deploy` CLI. Its GitHub environment and token are isolated from both Cloudflare deployments.

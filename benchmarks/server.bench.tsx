@@ -1,5 +1,5 @@
 /** @jsxImportSource preact */
-import { bench, describe } from "vite-plus/test";
+import { bench, describe } from "vitest";
 import { Partial } from "../src/server/partial";
 import { containsStoreSnapshot } from "../src/server/cache";
 import { extractPartials, findMarkers } from "../src/server/markers";

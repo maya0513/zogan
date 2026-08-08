@@ -1,6 +1,6 @@
 {
   "nodeMajor": 26,
-  "runtime": "Node 26.6.0 (nixpkgs e72e4f2, 2026-08-04)",
+  "runtime": "Node 26.6.0 (Linux x64)",
   "maxRegression": 0.2,
   "medianMilliseconds": {
     "DOM replacement: 20 product cards": 1.099989,

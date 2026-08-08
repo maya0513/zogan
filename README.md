@@ -168,7 +168,7 @@ This is deliberately stricter than a general-purpose HTML fetch helper. See the 
 - Hono 4.13+
 - Preact 10.29+
 - `@preact/signals` 2.11+
-- Vite 5–8 for `zogan/vite`
+- Vite 8 for `zogan/vite`
 - Deno 2.9+ for the JSR package and Deno example
 - Node.js 24.11+ for development and packaging
 - standards-based server runtimes supported by Hono
