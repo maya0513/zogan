@@ -125,5 +125,6 @@ jobs:
         env:
           DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
         run: >-
-          deno run --no-lock --allow-env=DENO_DEPLOY_TOKEN
+          deno run --no-lock
+          --allow-env=DENO_DEPLOY_TOKEN,WS_NO_BUFFER_UTIL,WS_NO_UTF_8_VALIDATE
           --allow-net=console.deno.com scripts/report-deno-deploy-failure.mjs
