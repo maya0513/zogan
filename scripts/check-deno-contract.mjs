@@ -5,6 +5,7 @@ const root = process.cwd();
 const readJson = (path) => JSON.parse(readFileSync(join(root, path), "utf8"));
 const npm = readJson("package.json");
 const deno = readJson("deno.json");
+const denoExample = readJson("examples/deno/package.json");
 
 const fail = (message) => {
   throw new Error(`Deno contract: ${message}`);
@@ -12,6 +13,9 @@ const fail = (message) => {
 
 if (deno.name !== "@maya0513/zogan") fail("unexpected JSR package name");
 if (deno.version !== npm.version) fail("npm and JSR versions differ");
+if (denoExample.dependencies?.zogan !== "workspace:*") {
+  fail("Deno example must resolve zogan through the pnpm workspace in Node tooling");
+}
 
 const expectedExports = {
   ".": "./src/server/index.ts",

@@ -10,6 +10,9 @@
     "test": "deno task test",
     "e2e": "playwright test"
   },
+  "dependencies": {
+    "zogan": "workspace:*"
+  },
   "devDependencies": {
     "@playwright/test": "^1.62.1"
   }

@@ -59,6 +59,10 @@ importers:
         version: 4.1.10(@types/node@26.1.2)(@vitest/browser-preview@4.1.10)(@vitest/coverage-v8@4.1.10)(happy-dom@20.11.1)(jsdom@30.0.1)(vite@8.2.1(@types/node@26.1.2)(esbuild@0.28.1))
 
   examples/deno:
+    dependencies:
+      zogan:
+        specifier: workspace:*
+        version: link:../..
     devDependencies:
       '@playwright/test':
         specifier: ^1.62.1
