@@ -111,7 +111,7 @@ deno deploy create . \
   --app zogan-deno \
   --source local \
   --do-not-use-detected-build-config \
-  --install-command "deno install --frozen --node-modules-dir=none" \
+  --install-command "deno install --frozen --node-modules-dir=manual" \
   --build-command "deno task deno:example:build" \
   --runtime-mode dynamic \
   --entrypoint examples/deno/server.tsx \

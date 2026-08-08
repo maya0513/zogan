@@ -42,7 +42,7 @@
   "deploy": {
     "org": "maya0513",
     "app": "zogan-deno",
-    "install": "deno install --frozen --node-modules-dir=none",
+    "install": "deno install --frozen --node-modules-dir=manual",
     "build": "deno task deno:example:build",
     "runtime": {
       "type": "dynamic",

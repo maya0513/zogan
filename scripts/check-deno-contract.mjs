@@ -19,6 +19,9 @@ if (denoExample.dependencies?.zogan !== "workspace:*") {
 if (deno.deploy?.org !== "maya0513" || deno.deploy?.app !== "zogan-deno") {
   fail("Deno Deploy organization and application must be present in deno.json");
 }
+if (deno.deploy?.install !== "deno install --frozen --node-modules-dir=manual") {
+  fail("Deno Deploy must install a node_modules directory for the Vite build");
+}
 
 const expectedExports = {
   ".": "./src/server/index.ts",
