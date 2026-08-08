@@ -120,3 +120,10 @@ jobs:
         env:
           DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
         run: deno deploy --json --non-interactive --org maya0513 --app zogan-deno --prod
+      - name: Report failed revision
+        if: failure()
+        env:
+          DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
+        run: >-
+          deno deploy deployments list --json --non-interactive
+          --org maya0513 --app zogan-deno --status failed --limit 1
