@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="zogan adds partial rendering, cache-safe fragments, islands, and soft navigation to Hono and Preact."
+    />
+    <meta name="theme-color" content="#11130f" />
+    <title>zogan — precise rendering boundaries for Hono and Preact</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <a class="wordmark" href="#top" aria-label="zogan home">
+        <span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        zogan
+      </a>
+
+      <button
+        class="navigation-toggle"
+        type="button"
+        aria-label="Open navigation"
+        aria-expanded="false"
+        aria-controls="primary-navigation"
+        data-navigation-toggle
+      >
+        <span></span><span></span>
+      </button>
+
+      <nav
+        id="primary-navigation"
+        class="primary-navigation"
+        aria-label="Primary"
+        data-navigation
+        data-open="false"
+      >
+        <a href="#why">Why</a>
+        <a href="#model">Model</a>
+        <a href="#quick-start">Quick start</a>
+        <a href="#examples">Examples</a>
+      </nav>
+
+      <span class="status">pre-release</span>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top">
+        <div class="hero-copy" data-reveal>
+          <p class="eyebrow"><span></span> Hono × Preact, connected</p>
+          <h1>Keep the whole page.<br /><em>Update only what changed.</em></h1>
+          <p class="hero-lede">
+            zogan gives server-rendered applications named partials, independently cached fragments,
+            selective hydration, and soft navigation—without replacing links, forms, or your router.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#quick-start">Read the quick start</a>
+            <a class="button button-secondary" href="#model">See the model <span>↓</span></a>
+          </div>
+        </div>
+
+        <div class="protocol-window" aria-label="A partial response moving from server to browser" data-reveal>
+          <div class="window-bar"><span></span><span></span><span></span><small>response.html</small></div>
+          <div class="request-line">
+            <span>REQUEST</span>
+            <code>X-Partial: results</code>
+          </div>
+          <pre><code><span class="dim">&lt;!--p:results--&gt;</span>
+&lt;ul class=<span class="green">"results"</span>&gt;
+  &lt;li&gt;A complete HTML result&lt;/li&gt;
+  &lt;li&gt;Ready to replace in place&lt;/li&gt;
+&lt;/ul&gt;
+<span class="dim">&lt;!--/p:results--&gt;</span></code></pre>
+          <div class="validation-line"><i></i><span>origin</span><i></i><span>content</span><i></i><span>markers</span></div>
+        </div>
+      </section>
+
+      <section class="premise section" id="why">
+        <div class="section-label">01 / Why</div>
+        <div class="premise-copy" data-reveal>
+          <h2>The missing protocol between a route and an island.</h2>
+          <p>
+            Hono already knows how to route a request. Preact already knows how to render and hydrate a
+            component. zogan defines the small, strict contract between those layers: what the server may
+            return, what the browser may replace, and how each response may be cached.
+          </p>
+        </div>
+        <dl class="ownership" data-reveal>
+          <div>
+            <dt>Your application owns</dt>
+            <dd>routes, data, authorization, domain state, cache infrastructure</dd>
+          </div>
+          <div>
+            <dt>zogan owns</dt>
+            <dd>render markers, response validation, DOM updates, hydration scheduling</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="model section" id="model">
+        <div class="section-heading" data-reveal>
+          <div class="section-label">02 / Model</div>
+          <h2>Four boundaries, one response model.</h2>
+          <p>Each primitive has one job. Compose only the ones a route needs.</p>
+        </div>
+
+        <div class="concept-grid">
+          <article class="concept concept-partial" data-reveal>
+            <span class="concept-index">P</span>
+            <div>
+              <h3>Partial</h3>
+              <p>A named region from the same page handler. No parallel data-loading route.</p>
+            </div>
+            <code>&lt;Partial name="results"&gt;</code>
+          </article>
+          <article class="concept concept-fragment" data-reveal>
+            <span class="concept-index">F</span>
+            <div>
+              <h3>Fragment</h3>
+              <p>A small HTML endpoint with an explicit, independent cache policy.</p>
+            </div>
+            <code>app.fragment("account", …)</code>
+          </article>
+          <article class="concept concept-island" data-reveal>
+            <span class="concept-index">I</span>
+            <div>
+              <h3>Island</h3>
+              <p>Useful server HTML that hydrates only when its trigger says it should.</p>
+            </div>
+            <code>trigger="visible"</code>
+          </article>
+          <article class="concept concept-store" data-reveal>
+            <span class="concept-index">S</span>
+            <div>
+              <h3>Store</h3>
+              <p>A versioned server snapshot, separate from optimistic application state.</p>
+            </div>
+            <code>{ version: 42 }</code>
+          </article>
+        </div>
+      </section>
+
+      <section class="contract section">
+        <div class="contract-copy" data-reveal>
+          <div class="section-label">03 / Safe by contract</div>
+          <h2>Validate first.<br />Touch the DOM second.</h2>
+          <p>
+            Enhanced navigation is useful only when failure is predictable. zogan checks a response as a
+            protocol message, not merely as a string of HTML.
+          </p>
+        </div>
+        <ol class="checks" data-reveal>
+          <li><span>01</span> same origin and normalized URL</li>
+          <li><span>02</span> manual redirect behavior</li>
+          <li><span>03</span> HTML content type</li>
+          <li><span>04</span> matching response headers and markers</li>
+          <li><span>05</span> cache-safe store snapshots</li>
+        </ol>
+      </section>
+
+      <section class="quick-start section" id="quick-start">
+        <div class="section-heading" data-reveal>
+          <div class="section-label">04 / Quick start</div>
+          <h2>One setup call. One page handler.</h2>
+          <p>Install the shared runtimes alongside zogan, then keep rendering through Hono.</p>
+        </div>
+
+        <div class="install-command" data-reveal>
+          <span aria-hidden="true">$</span>
+          <code>pnpm add zogan hono preact @preact/signals</code>
+          <button
+            type="button"
+            data-copy="pnpm add zogan hono preact @preact/signals"
+            aria-label="Copy install command"
+          >
+            Copy
+          </button>
+        </div>
+
+        <div class="code-pair">
+          <article class="code-card" data-reveal>
+            <header><span>server.tsx</span><small>Hono + Preact</small></header>
+            <pre><code><span class="purple">import</span> { Hono } <span class="purple">from</span> <span class="green">"hono"</span>;
+<span class="purple">import</span> { Partial, zogan } <span class="purple">from</span> <span class="green">"zogan"</span>;
+
+<span class="purple">const</span> app = <span class="purple">new</span> Hono();
+zogan(app, { layout: Layout });
+
+app.page(<span class="green">"/articles"</span>, (c) =&gt; {
+  c.header(<span class="green">"Cache-Control"</span>, <span class="green">"public, s-maxage=60"</span>);
+  <span class="purple">return</span> c.render(
+    &lt;Partial name=<span class="green">"results"</span>&gt;
+      &lt;ArticleList /&gt;
+    &lt;/Partial&gt;,
+  );
+});</code></pre>
+          </article>
+          <article class="code-card" data-reveal>
+            <header><span>client.ts</span><small>progressive enhancement</small></header>
+            <pre><code><span class="purple">import</span> { start } <span class="purple">from</span> <span class="green">"zogan/client"</span>;
+<span class="purple">import</span> AccountMenu <span class="purple">from</span>
+  <span class="green">"./islands/AccountMenu"</span>;
+
+start({
+  islands: { AccountMenu },
+});
+
+<span class="dim">// Links and forms already work.
+// This adds partial navigation
+// and selective hydration.</span></code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section class="baseline section">
+        <div class="baseline-word" aria-hidden="true">HTML</div>
+        <div class="baseline-copy" data-reveal>
+          <div class="section-label">The baseline</div>
+          <h2>JavaScript is an upgrade, not an entrance requirement.</h2>
+          <p>
+            Pages begin as complete server-rendered HTML. Ordinary links and forms remain available when
+            scripts fail, are delayed, or are disabled. Partial navigation and islands layer on top.
+          </p>
+        </div>
+      </section>
+
+      <section class="examples section" id="examples">
+        <div class="section-heading" data-reveal>
+          <div class="section-label">05 / See it assembled</div>
+          <h2>From protocol to application.</h2>
+        </div>
+        <article class="example-card" data-reveal>
+          <div>
+            <span class="example-kicker">Workers + D1 example</span>
+            <h3>A small shop with real cache boundaries.</h3>
+            <p>
+              Product pages stay publicly cacheable while cart fragments remain private. Browse, filter,
+              add to cart, and complete the simulated checkout with JavaScript enabled or disabled.
+            </p>
+          </div>
+          <div class="example-command">
+            <code>pnpm --filter @zogan/shop db:setup<br />pnpm --filter @zogan/shop dev</code>
+          </div>
+        </article>
+      </section>
+
+      <section class="closing section" data-reveal>
+        <p>Render on the server.</p>
+        <h2>Draw the boundary.<br /><em>Keep the web underneath.</em></h2>
+        <a class="button button-primary" href="#quick-start">Start with one page</a>
+      </section>
+    </main>
+
+    <footer>
+      <a class="wordmark" href="#top"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>zogan</a>
+      <p>Partial rendering and progressive enhancement for Hono and Preact.</p>
+      <p>MIT License</p>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,104 @@
+{
+  "name": "zogan",
+  "version": "0.0.0",
+  "description": "Partial rendering, islands, and soft navigation for Hono and Preact",
+  "license": "MIT",
+  "workspaces": [
+    "examples/*"
+  ],
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/server/index.d.ts",
+      "default": "./dist/server/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "default": "./dist/client/index.js"
+    },
+    "./vite": {
+      "types": "./dist/vite/index.d.mts",
+      "default": "./dist/vite/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/server/index.d.ts",
+        "default": "./dist/server/index.js"
+      },
+      "./client": {
+        "types": "./dist/client/index.d.ts",
+        "default": "./dist/client/index.js"
+      },
+      "./vite": {
+        "types": "./dist/vite/index.d.mts",
+        "default": "./dist/vite/index.mjs"
+      },
+      "./package.json": "./package.json"
+    }
+  },
+  "scripts": {
+    "test": "vp test --run",
+    "coverage": "vp test --run --coverage",
+    "check": "vp check",
+    "build": "node scripts/build-package.mjs",
+    "bench": "node scripts/run-benchmarks.mjs && node scripts/compare-benchmarks.mjs benchmarks/baseline.node26.json benchmarks/current.json",
+    "package:check": "pnpm run build && node scripts/check-bundle-sizes.mjs && node scripts/check-package.mjs",
+    "package:check:deno": "node scripts/check-deno-package.mjs",
+    "deno:check": "deno task deno:check",
+    "deno:test": "deno task deno:test",
+    "deno:build": "deno task deno:example:build",
+    "deno:jsr": "deno task deno:jsr",
+    "deno:e2e": "pnpm --filter @zogan/deno-example e2e",
+    "deno:contract": "node scripts/check-deno-contract.mjs",
+    "demo:build": "pnpm run build && pnpm --filter @zogan/shop build",
+    "demo:test": "pnpm --filter @zogan/shop test",
+    "demo:e2e": "pnpm --filter @zogan/shop e2e",
+    "site:build": "pnpm --filter @zogan/site build",
+    "site:e2e": "pnpm --filter @zogan/site e2e",
+    "site:deploy:dry": "pnpm run site:build && pnpm --filter @zogan/site deploy:dry",
+    "deploy:validate": "node scripts/validate-deployment-config.mjs",
+    "deploy:dry": "pnpm run site:deploy:dry && pnpm run demo:build && pnpm --filter @zogan/shop deploy:dry",
+    "deps:check": "pnpm outdated --recursive"
+  },
+  "dependencies": {
+    "es-module-lexer": "^2.3.1",
+    "preact-render-to-string": "^6.7.0"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@playwright/test": "^1.62.1",
+    "@preact/signals": "^2.11.0",
+    "@types/node": "^26.1.2",
+    "@vitest/coverage-v8": "^4.1.10",
+    "happy-dom": "^20.11.1",
+    "hono": "^4.13.1",
+    "jsdom": "^30.0.1",
+    "preact": "^10.29.8",
+    "publint": "^0.3.23",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1",
+    "vite-plus": "^0.2.8",
+    "vitest": "4.1.10"
+  },
+  "peerDependencies": {
+    "@preact/signals": ">=2.11.0 <3",
+    "hono": ">=4.13.0 <5",
+    "preact": ">=10.29.8 <11",
+    "vite": "^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=24.11.0"
+  },
+  "packageManager": "pnpm@11.20.0"
+}

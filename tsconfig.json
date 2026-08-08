@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["vite-plus/test/globals"],
+    "paths": {
+      "zogan": ["./src/server/index.ts"],
+      "zogan/client": ["./src/client/index.ts"],
+      "zogan/vite": ["./src/vite/index.ts"]
+    }
+  },
+  "include": ["src", "tests", "vite.config.ts"]
+}

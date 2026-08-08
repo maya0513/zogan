@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.window", "dom", "dom.iterable"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "strict": true
+  },
+  "tasks": {
+    "dev": "deno run -A npm:vite@8.2.1 --host 127.0.0.1 --port 4180",
+    "build": "deno run -A npm:vite@8.2.1 build",
+    "start": "deno run --allow-net --allow-read=dist --allow-env=PORT server.tsx",
+    "test": "deno test tests"
+  }
+}

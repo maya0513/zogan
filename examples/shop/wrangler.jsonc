@@ -1,0 +1,28 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "zogan-shop-demo",
+	"main": "src/worker.tsx",
+	"compatibility_date": "2026-08-05",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
+	"workers_dev": true,
+	"preview_urls": true,
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "zogan-shop",
+			"database_id": "0857fbdf-16c9-46af-bf88-7aaeac4052c1",
+			"migrations_dir": "migrations",
+		},
+		{
+			"binding": "zogan_shop",
+			"database_name": "zogan-shop",
+			"database_id": "0857fbdf-16c9-46af-bf88-7aaeac4052c1",
+			"remote": true
+		},
+	],
+	"observability": {
+		"enabled": true,
+	},
+}

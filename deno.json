@@ -1,0 +1,50 @@
+{
+  "$schema": "https://deno.land/x/deno/cli/schemas/config-file.v1.json",
+  "name": "@maya0513/zogan",
+  "version": "0.0.0",
+  "exports": {
+    ".": "./src/server/index.ts",
+    "./client": "./src/client/index.ts",
+    "./vite": "./src/vite/index.ts"
+  },
+  "workspace": ["./examples/deno"],
+  "nodeModulesDir": "manual",
+  "compilerOptions": {
+    "lib": ["deno.window", "dom", "dom.iterable"],
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact",
+    "strict": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "imports": {
+    "@preact/signals": "npm:@preact/signals@^2.11.0",
+    "hono": "npm:hono@^4.13.0",
+    "preact": "npm:preact@^10.29.8",
+    "preact/": "npm:preact@^10.29.8/",
+    "preact-render-to-string": "npm:preact-render-to-string@^6.7.0",
+    "vite": "npm:vite@^8.2.1",
+    "zogan": "./src/server/index.ts",
+    "zogan/client": "./src/client/index.ts",
+    "zogan/vite": "./src/vite/index.ts"
+  },
+  "tasks": {
+    "deno:check": "deno check src/server/index.ts src/client/index.ts src/vite/index.ts tests/deno/runtime_test.ts examples/deno/server.tsx examples/deno/src/client.ts",
+    "deno:test": "deno test tests/deno examples/deno/tests",
+    "deno:example:build": "deno task --config examples/deno/deno.json build",
+    "deno:example:dev": "deno task --config examples/deno/deno.json dev",
+    "deno:example:start": "deno task --config examples/deno/deno.json start",
+    "deno:jsr": "deno doc --lint src/server/index.ts src/client/index.ts src/vite/index.ts 2>&1 | node scripts/check-deno-doc.mjs && deno publish --dry-run --allow-slow-types",
+    "deno:ci": "deno task deno:check && deno task deno:example:build && deno task deno:test && deno task deno:jsr"
+  },
+  "publish": {
+    "include": ["LICENSE", "README.md", "README.ja.md", "src/**/*.ts"]
+  },
+  "deploy": {
+    "install": "deno install --frozen --node-modules-dir=none",
+    "build": "deno task deno:example:build",
+    "runtime": {
+      "type": "dynamic",
+      "entrypoint": "./examples/deno/server.tsx"
+    }
+  }
+}

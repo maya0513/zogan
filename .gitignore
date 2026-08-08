@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output and tool caches
+dist/
+.vite/
+.vite-plus/
+*.tsbuildinfo
+
+# Tests and local measurements
+coverage/
+playwright-report/
+test-results/
+blob-report/
+benchmarks/current.json
+.package-check-*/
+.deno/
+examples/deno/.vite/
+
+# Cloudflare local state and secrets
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Nix build links
+result
+result-*
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*~
+*.swp
+
+# Logs and diagnostic output
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*

@@ -1,0 +1,46 @@
+:root {
+  color: #172033;
+  background: #f3f5f8;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  width: min(44rem, calc(100% - 2rem));
+  margin: 4rem auto;
+  padding: 2rem;
+  border: 1px solid #d9deea;
+  border-radius: 1rem;
+  background: white;
+  box-shadow: 0 1rem 3rem rgb(29 43 72 / 10%);
+}
+
+nav,
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+a,
+button {
+  color: #165dbe;
+}
+
+button {
+  padding: 0.55rem 0.8rem;
+  border: 1px solid #b9c6da;
+  border-radius: 0.5rem;
+  background: #f8faff;
+  cursor: pointer;
+}
+
+[data-island="Clock"] {
+  display: inline-block;
+  min-width: 12rem;
+  font-variant-numeric: tabular-nums;
+}
