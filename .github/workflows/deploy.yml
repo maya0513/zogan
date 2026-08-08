@@ -116,6 +116,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: deno install --frozen --node-modules-dir=manual
       - run: deno task deno:example:build
+      - name: Synchronize deployment configuration
+        env:
+          DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
+        run: >-
+          deno run --frozen
+          --allow-env=DENO_DEPLOY_TOKEN,WS_NO_BUFFER_UTIL,WS_NO_UTF_8_VALIDATE
+          --allow-net=console.deno.com scripts/sync-deno-deploy-config.mjs
       - name: Deploy production revision
         env:
           DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
@@ -125,6 +132,6 @@ jobs:
         env:
           DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
         run: >-
-          deno run --no-lock
+          deno run --frozen
           --allow-env=DENO_DEPLOY_TOKEN,WS_NO_BUFFER_UTIL,WS_NO_UTF_8_VALIDATE
           --allow-net=console.deno.com scripts/report-deno-deploy-failure.mjs

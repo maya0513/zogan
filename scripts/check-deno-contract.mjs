@@ -23,6 +23,13 @@ if (deno.deploy?.install !== "deno install --frozen --node-modules-dir=manual") 
   fail("Deno Deploy must install a node_modules directory for the Vite build");
 }
 
+const deployWorkflow = readFileSync(join(root, ".github/workflows/deploy.yml"), "utf8");
+const syncConfigAt = deployWorkflow.indexOf("scripts/sync-deno-deploy-config.mjs");
+const deployAt = deployWorkflow.indexOf("deno deploy --json --non-interactive");
+if (syncConfigAt < 0 || deployAt < 0 || syncConfigAt >= deployAt) {
+  fail("the deployment workflow must synchronize the app config before publishing");
+}
+
 const expectedExports = {
   ".": "./src/server/index.ts",
   "./client": "./src/client/index.ts",

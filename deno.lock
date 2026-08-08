@@ -1,6 +1,11 @@
 {
   "version": "5",
   "specifiers": {
+    "jsr:@deno/sandbox@~0.13.2": "0.13.2",
+    "jsr:@std/fs@^1.0.19": "1.0.24",
+    "jsr:@std/internal@^1.0.14": "1.0.14",
+    "jsr:@std/path@^1.1.2": "1.1.6",
+    "jsr:@std/path@^1.1.5": "1.1.6",
     "npm:@arethetypeswrong/cli@~0.18.5": "0.18.5",
     "npm:@cloudflare/vite-plugin@^1.51.1": "1.51.1_vite@8.2.1__@types+node@26.1.2__esbuild@0.28.1_wrangler@4.120.0",
     "npm:@cloudflare/vitest-pool-workers@~0.20.3": "0.20.3_@vitest+runner@4.1.10_@vitest+snapshot@4.1.10_vitest@4.1.10__@types+node@26.1.2__@vitest+browser-preview@4.1.10__@vitest+coverage-v8@4.1.10__happy-dom@20.11.1__jsdom@30.0.1__vite@8.2.1___@types+node@26.1.2___esbuild@0.28.1",
@@ -22,6 +27,31 @@
     "npm:vitest@4.1.10": "4.1.10_@types+node@26.1.2_@vitest+browser-preview@4.1.10_@vitest+coverage-v8@4.1.10_happy-dom@20.11.1_jsdom@30.0.1_vite@8.2.1__@types+node@26.1.2__esbuild@0.28.1",
     "npm:vitest@^4.1.10": "4.1.10_@types+node@26.1.2_@vitest+browser-preview@4.1.10_@vitest+coverage-v8@4.1.10_happy-dom@20.11.1_jsdom@30.0.1_vite@8.2.1__@types+node@26.1.2__esbuild@0.28.1",
     "npm:wrangler@^4.120.0": "4.120.0"
+  },
+  "jsr": {
+    "@deno/sandbox@0.13.2": {
+      "integrity": "c24c7eb9cc00b94954ebffb4ee4f685ef731e6026788044f9eb8a1aa9bfc2cd8",
+      "dependencies": [
+        "jsr:@std/fs",
+        "jsr:@std/path@^1.1.2"
+      ]
+    },
+    "@std/fs@1.0.24": {
+      "integrity": "f3061b45b81673a2bece689da041df32d174be064c89eb6397fb5718d3fb7877",
+      "dependencies": [
+        "jsr:@std/internal",
+        "jsr:@std/path@^1.1.5"
+      ]
+    },
+    "@std/internal@1.0.14": {
+      "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
+    },
+    "@std/path@1.1.6": {
+      "integrity": "c68485c2a4dfbb5ae3cc74fae4e8c4e5d874cf8a8ed12927917235c758b46cbe",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
+    }
   },
   "npm": {
     "@andrewbranch/untar.js@1.0.3": {
