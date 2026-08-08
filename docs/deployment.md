@@ -105,6 +105,8 @@ pnpm run deploy:validate
 
 ```sh
 deno deploy create . \
+  --json \
+  --non-interactive \
   --org maya0513 \
   --app zogan-deno \
   --source local \
@@ -118,14 +120,14 @@ deno deploy create . \
   --region global
 ```
 
-以後は、リポジトリに含まれる`deno.json`をインストール、ビルド、動的ランタイム設定の正本とします。createコマンドは最初のデプロイも実行するため、applicationがまだ存在しない場合に限り実行してください。
+以後は、リポジトリに含まれる`deno.json`をorganization、application、インストール、ビルド、動的ランタイム設定の正本とします。createコマンドは最初のデプロイも実行するため、applicationがまだ存在しない場合に限り実行してください。
 
 3. organization設定で、`zogan-deno`のデプロイに必要な最小限の権限を持つorganization tokenを発行します。
 4. GitHub repositoryにEnvironment `production-deno`を作成します。`DENO_DEPLOY_TOKEN`をEnvironmentシークレットとして追加し、必要に応じて必須レビュアーまたはデプロイブランチ保護を設定します。
 5. 完成した変更を`main`へプッシュします。CIが成功すると、`.github/workflows/deploy.yml`がサンプルを再ビルドし、次のコマンドを実行します。
 
 ```sh
-deno deploy --org maya0513 --app zogan-deno --prod
+deno deploy --json --non-interactive --org maya0513 --app zogan-deno --prod
 ```
 
 想定する本番URLは<https://zogan-deno.maya0513.deno.net>です。ローカルテスト、JSRのdry-run、サンプルのビルドではトークンを必要としません。

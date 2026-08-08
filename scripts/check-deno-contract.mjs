@@ -16,6 +16,9 @@ if (deno.version !== npm.version) fail("npm and JSR versions differ");
 if (denoExample.dependencies?.zogan !== "workspace:*") {
   fail("Deno example must resolve zogan through the pnpm workspace in Node tooling");
 }
+if (deno.deploy?.org !== "maya0513" || deno.deploy?.app !== "zogan-deno") {
+  fail("Deno Deploy organization and application must be present in deno.json");
+}
 
 const expectedExports = {
   ".": "./src/server/index.ts",

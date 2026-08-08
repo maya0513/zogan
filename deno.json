@@ -40,6 +40,8 @@
     "include": ["LICENSE", "README.md", "README.ja.md", "src/**/*.ts"]
   },
   "deploy": {
+    "org": "maya0513",
+    "app": "zogan-deno",
     "install": "deno install --frozen --node-modules-dir=none",
     "build": "deno task deno:example:build",
     "runtime": {
