@@ -73,7 +73,11 @@ export default defineConfig({
         test: {
           name: "server",
           environment: "node",
-          include: ["tests/server/**/*.test.ts?(x)", "tests/vite/**/*.test.ts?(x)"],
+          include: [
+            "tests/server/**/*.test.ts?(x)",
+            "tests/tooling/**/*.test.ts?(x)",
+            "tests/vite/**/*.test.ts?(x)",
+          ],
         },
       },
       {

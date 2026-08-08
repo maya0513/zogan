@@ -69,4 +69,5 @@ deno-ci:
     pnpm run deno:e2e
 
 # CI で回す決定的な品質ゲート（benchmark と browser E2E は専用 job）
-ci: check coverage build package-check site demo
+# check は package.json の self-reference から dist を解決するため、clean checkout では build を先に行う。
+ci: build check coverage package-check site demo
