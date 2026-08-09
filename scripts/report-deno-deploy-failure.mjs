@@ -1,7 +1,7 @@
 import { Client } from "jsr:@deno/sandbox@^0.13.2";
+import manifest from "../deno.json" with { type: "json" };
 
-const organization = "maya0513";
-const application = "zogan-deno";
+const { app: application, org: organization } = manifest.deploy;
 const token = Deno.env.get("DENO_DEPLOY_TOKEN");
 
 if (!token) {

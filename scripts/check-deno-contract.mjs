@@ -23,11 +23,18 @@ if (deno.deploy?.install !== "deno install --frozen --node-modules-dir=manual") 
   fail("Deno Deploy must install a node_modules directory for the Vite build");
 }
 
-const deployWorkflow = readFileSync(join(root, ".github/workflows/deploy.yml"), "utf8");
+const deployWorkflow = readFileSync(join(root, ".github/workflows/deploy-deno.yml"), "utf8");
 const syncConfigAt = deployWorkflow.indexOf("scripts/sync-deno-deploy-config.mjs");
-const deployAt = deployWorkflow.indexOf("deno deploy --json --non-interactive");
+const deployAt = deployWorkflow.indexOf("scripts/deploy-deno.mjs");
 if (syncConfigAt < 0 || deployAt < 0 || syncConfigAt >= deployAt) {
   fail("the deployment workflow must synchronize the app config before publishing");
+}
+
+for (const workflow of ["deploy-site.yml", "deploy-demo.yml", "deploy-deno.yml"]) {
+  const source = readFileSync(join(root, ".github/workflows", workflow), "utf8");
+  if (!source.includes("workflows: [ci]") || !source.includes("workflow_dispatch:")) {
+    fail(`${workflow} must support CI-gated and manual deployments`);
+  }
 }
 
 const expectedExports = {

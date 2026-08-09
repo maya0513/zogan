@@ -14,12 +14,12 @@
 
 ## デプロイの実行条件
 
-`.github/workflows/deploy.yml`は、次のいずれかの場合に実行されます。
+`.github/workflows/deploy-site.yml`、`.github/workflows/deploy-demo.yml`、`.github/workflows/deploy-deno.yml`は、それぞれ次のいずれかの場合に実行されます。
 
 1. `main`へのプッシュを対象とした`ci`ワークフローが成功した場合
 2. メンテナーがGitHub Actionsの**Run workflow**から手動実行した場合
 
-Pull Requestからデプロイされることはありません。CIが失敗した場合もデプロイされません。ワークフローはCIを通過したものと同一のコミットをチェックアウトし、実行中の処理をキャンセルしない単一の本番同時実行グループを使用することで、複数リビジョンの競合を防ぎます。
+Pull Requestからデプロイされることはありません。CIが失敗した場合もデプロイされません。各ワークフローはCIを通過したものと同一のコミットをチェックアウトし、サービスごとに独立した本番同時実行グループを使用します。実行中のデプロイはキャンセルせず、同じサービスに対する複数リビジョンの競合を防ぎます。
 
 各ジョブは、`production-introduction`、`production-demo`、`production-deno`という個別のGitHub Environmentを使用します。あるサービスのデプロイが失敗しても、別のサービスですでに公開されたリビジョンが巻き戻されることはありません。
 
@@ -124,10 +124,12 @@ deno deploy create . \
 
 3. organization設定で、`zogan-deno`のデプロイに必要な最小限の権限を持つorganization tokenを発行します。
 4. GitHub repositoryにEnvironment `production-deno`を作成します。`DENO_DEPLOY_TOKEN`をEnvironmentシークレットとして追加し、必要に応じて必須レビュアーまたはデプロイブランチ保護を設定します。
-5. 完成した変更を`main`へプッシュします。CIが成功すると、`.github/workflows/deploy.yml`がサンプルを再ビルドし、次のコマンドを実行します。
+5. 完成した変更を`main`へプッシュします。CIが成功すると、`.github/workflows/deploy-deno.yml`がサンプルを再ビルドし、次のコマンド相当の処理を実行します。
 
 ```sh
 deno deploy --json --non-interactive --org maya0513 --app zogan-deno --prod
 ```
+
+設定変更直後にDeno Deployが終了済みの失敗revisionを返した場合に限り、ワークフローは同じコマンドを1回だけ再試行します。認証エラーや別種の失敗は再試行せず、そのまま失敗として報告します。
 
 想定する本番URLは<https://zogan-deno.maya0513.deno.net>です。ローカルテスト、JSRのdry-run、サンプルのビルドではトークンを必要としません。
