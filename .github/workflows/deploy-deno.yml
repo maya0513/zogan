@@ -48,7 +48,7 @@ jobs:
           DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
         run: >-
           deno run --frozen
-          --allow-env=DENO_DEPLOY_TOKEN,WS_NO_BUFFER_UTIL,WS_NO_UTF_8_VALIDATE
+          --allow-env=DENO_DEPLOY_TOKEN,DENO_DEPLOY_ORG,WS_NO_BUFFER_UTIL,WS_NO_UTF_8_VALIDATE
           --allow-net=console.deno.com scripts/sync-deno-deploy-config.mjs
       - name: Deploy production revision
         env:
@@ -60,5 +60,5 @@ jobs:
           DENO_DEPLOY_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
         run: >-
           deno run --frozen
-          --allow-env=DENO_DEPLOY_TOKEN,WS_NO_BUFFER_UTIL,WS_NO_UTF_8_VALIDATE
+          --allow-env=DENO_DEPLOY_TOKEN,DENO_DEPLOY_ORG,WS_NO_BUFFER_UTIL,WS_NO_UTF_8_VALIDATE
           --allow-net=console.deno.com scripts/report-deno-deploy-failure.mjs
