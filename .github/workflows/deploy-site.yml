@@ -35,6 +35,9 @@ jobs:
         with:
           node-version: 24
           cache: true
+      # setup-vp manages pnpm for `vp`, but wrangler-action invokes the
+      # configured package manager directly and therefore needs it on PATH.
+      - uses: pnpm/action-setup@v4
       - run: vp install --frozen-lockfile
       - run: vp run @zogan/site#build
       - name: Deploy Workers Static Assets
