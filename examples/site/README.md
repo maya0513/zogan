@@ -10,4 +10,4 @@ pnpm --filter @zogan/site deploy:dry
 ```
 
 The production build is emitted to `examples/site/dist` and uses relative asset URLs so it can be hosted below a subpath.
-Production is deployed as the `zogan` Cloudflare Worker using Workers Static Assets. See the [deployment guide](../../docs/deployment.md) for GitHub Actions setup.
+Production is deployed as the `zogan` Cloudflare Worker using Workers Static Assets.
