@@ -122,7 +122,7 @@ deno deploy create . \
 
 以後は、リポジトリに含まれる`deno.json`をorganization、application、インストール、ビルド、動的ランタイム設定の正本とします。GitHub Actionsは公開前にその内容を既存applicationへ同期します。createコマンドは最初のデプロイも実行するため、applicationがまだ存在しない場合に限り実行してください。
 
-3. organization設定で、`zogan-deno`のデプロイに必要な最小限の権限を持つorganization tokenを発行します。
+3. `maya0513`のorganization設定にある**Organization tokens**からorganization tokenを発行します。organization tokenにはアプリ別の権限選択はなく、作成元organizationへ紐づきます。Account設定のPersonal access tokenと混同しないでください。
 4. GitHub repositoryにEnvironment `production-deno`を作成します。`DENO_DEPLOY_TOKEN`をEnvironmentシークレットとして追加し、必要に応じて必須レビュアーまたはデプロイブランチ保護を設定します。
 5. 完成した変更を`main`へプッシュします。CIが成功すると、`.github/workflows/deploy-deno.yml`がサンプルを再ビルドし、次のコマンド相当の処理を実行します。
 

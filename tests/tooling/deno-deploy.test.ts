@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { deployClientOptions } from "../../scripts/deno-deploy-auth.mjs";
 import { deployWithRetry } from "../../scripts/deploy-deno.mjs";
 
 const inactiveBuild = {
@@ -44,5 +45,22 @@ describe("Deno Deploy retry", () => {
 
     await expect(deployWithRetry(run)).resolves.toEqual(inactiveBuild);
     expect(run).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("Deno Deploy authentication", () => {
+  it("lets an organization token select its own organization", () => {
+    expect(deployClientOptions("ddo_example", "maya0513")).toEqual({
+      apiEndpoint: "https://console.deno.com",
+      token: "ddo_example",
+    });
+  });
+
+  it("supplies the organization for a personal token", () => {
+    expect(deployClientOptions("ddp_example", "maya0513")).toEqual({
+      apiEndpoint: "https://console.deno.com",
+      org: "maya0513",
+      token: "ddp_example",
+    });
   });
 });
