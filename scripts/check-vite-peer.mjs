@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,35 +15,40 @@ if (!existsSync(clientEntry)) {
 const fixtureRoot = mkdtempSync(join(tmpdir(), "zogan-vite-peer-"));
 const sourceRoot = join(fixtureRoot, "src");
 const islandsRoot = join(sourceRoot, "islands");
-mkdirSync(islandsRoot, { recursive: true });
 
-writeFileSync(join(islandsRoot, "Greeting.js"), "export default () => null;\n");
-writeFileSync(join(sourceRoot, "client.js"), 'import "virtual:zogan/islands";\n');
-writeFileSync(join(sourceRoot, "server.js"), 'export const runtime = "server";\n');
+try {
+  mkdirSync(islandsRoot, { recursive: true });
 
-await build({
-  root: fixtureRoot,
-  configFile: false,
-  logLevel: "silent",
-  resolve: { alias: { "zogan/client": clientEntry } },
-  plugins: [zoganVite({ islandsDir: "src/islands" })],
-  build: {
-    emptyOutDir: true,
-    outDir: "dist/client",
-    rollupOptions: { input: join(sourceRoot, "client.js") },
-  },
-});
+  writeFileSync(join(islandsRoot, "Greeting.js"), "export default () => null;\n");
+  writeFileSync(join(sourceRoot, "client.js"), 'import "virtual:zogan/islands";\n');
+  writeFileSync(join(sourceRoot, "server.js"), 'export const runtime = "server";\n');
 
-await build({
-  root: fixtureRoot,
-  configFile: false,
-  logLevel: "silent",
-  plugins: [zoganVite({ islandsDir: "src/islands" })],
-  build: {
-    emptyOutDir: true,
-    outDir: "dist/server",
-    ssr: join(sourceRoot, "server.js"),
-  },
-});
+  await build({
+    root: fixtureRoot,
+    configFile: false,
+    logLevel: "silent",
+    resolve: { alias: { "zogan/client": clientEntry } },
+    plugins: [zoganVite({ islandsDir: "src/islands" })],
+    build: {
+      emptyOutDir: true,
+      outDir: "dist/client",
+      rollupOptions: { input: join(sourceRoot, "client.js") },
+    },
+  });
 
-console.log(`Vite ${version} peer smoke passed.`);
+  await build({
+    root: fixtureRoot,
+    configFile: false,
+    logLevel: "silent",
+    plugins: [zoganVite({ islandsDir: "src/islands" })],
+    build: {
+      emptyOutDir: true,
+      outDir: "dist/server",
+      ssr: join(sourceRoot, "server.js"),
+    },
+  });
+
+  console.log(`Vite ${version} peer smoke passed.`);
+} finally {
+  rmSync(fixtureRoot, { recursive: true, force: true });
+}

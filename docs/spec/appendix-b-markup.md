@@ -160,7 +160,7 @@ const json = (data: unknown) =>
 | リダイレクト | `3xx` そのまま | `X-Partial` を付けない |
 | エラー | `4xx` / `5xx` そのまま | `X-Partial` を付けない |
 
-### B.3.2 Fragment
+### B.3.2 Fragment 応答
 
 **応答**
 
@@ -212,20 +212,20 @@ const json = (data: unknown) =>
 - [ ] `fetch` に `redirect: 'manual'` を指定している
 - [ ] リダイレクト判定を `res.type === 'opaqueredirect'` で行っている（`res.status` を見ていない）
 
-## B.5 Response validation order
+## B.5 応答の検証順序
 
-Fragment, navigation, and enhanced-form fetches perform all applicable checks before changing DOM or Store state:
+Fragment、ナビゲーション、拡張フォームの fetch では、DOM や Store の状態を変更する前に、該当する検査をすべて行います。
 
-1. Resolve against `location.href`, require the same origin, normalize the configured Fragment prefix, and require a path-segment boundary rather than a string prefix.
-2. Fetch with `credentials: 'same-origin'` and `redirect: 'manual'`.
-3. Reject opaque/manual redirects and non-2xx responses.
-4. Parse `Content-Type` as a media type and require `text/html` case-insensitively. Parameters are allowed.
-5. Parse protocol headers as ordered exact tokens. Reject duplicate, missing, unexpected, or header/body-mismatched Partial names.
-6. Parse the complete body into detached nodes, validate markers and snapshots, then merge Store state and mutate the DOM.
+1. `location.href` を基準に URL を解決し、同一オリジンであることを確認する。設定された Fragment 接頭辞を正規化し、単なる文字列の前方一致ではなくパス区切りの境界を要求する。
+2. `credentials: 'same-origin'` と `redirect: 'manual'` を指定して fetch する。
+3. opaque/manual リダイレクトと 2xx 以外の応答を拒否する。
+4. `Content-Type` をメディアタイプとして解析し、大文字小文字を区別せず `text/html` を要求する。パラメーターは許可する。
+5. プロトコルヘッダを、順序を持つ完全一致トークンとして解析する。Partial 名の重複、不足、想定外の値、ヘッダと本文の不一致を拒否する。
+6. 本文全体を文書から切り離されたノードとして解析し、マーカーと snapshot を検証する。その後に Store の状態をマージして DOM を変更する。
 
-Concurrent requests for the same canonical Fragment URL share one promise. Every still-connected Island whose normalized `data-fragment` exactly matches receives the result; disconnected targets are skipped. A replacement invalidates pending Island hydration so a removed node cannot be hydrated later.
+同じ正規化済み Fragment URL に対する並行リクエストは、1 つの Promise を共有します。正規化された `data-fragment` が完全に一致し、接続が維持されているすべての Island が結果を受け取ります。切断済みの対象は無視します。置換時には保留中の Island ハイドレーションを無効化し、削除済みノードが後からハイドレートされないようにします。
 
-Enhanced forms use the actual submitter (`formaction`, `formmethod`, `formenctype`, name, and value), preserve repeated names and file names, append GET fields to the query, and select URL-encoded, multipart, or text bodies according to the effective encoding. Forms without `data-partial` or `data-fragment` are never intercepted. Validation failure invokes the native form submission path.
+拡張フォームでは、実際の submitter の `formaction`、`formmethod`、`formenctype`、name、value を使います。重複した name とファイル名を保持し、GET のフィールドをクエリへ追加し、有効な encoding に従って URL-encoded、multipart、text の本文を選びます。`data-partial` と `data-fragment` のどちらも持たないフォームは傍受しません。検証に失敗した場合は、ブラウザ標準のフォーム送信経路を呼び出します。
 - [ ] DOM 挿入より**前**にフォールバック判定を完了している
 - [ ] **Store マージが Island ハイドレートより先**（差し替え時・初回ロード時の両方）
 - [ ] 走査範囲が「今回挿入された範囲」に限定されている

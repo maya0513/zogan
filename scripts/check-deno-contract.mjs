@@ -23,30 +23,6 @@ if (deno.deploy?.install !== "deno install --frozen --node-modules-dir=manual") 
   fail("Deno Deploy must install a node_modules directory for the Vite build");
 }
 
-const deployWorkflow = readFileSync(join(root, ".github/workflows/deploy-deno.yml"), "utf8");
-if (!deployWorkflow.includes("Deno Deploy's GitHub integration")) {
-  fail("the disabled deployment workflow must document the GitHub integration");
-}
-const activeDeployWorkflow = deployWorkflow
-  .split(/\r?\n/)
-  .filter((line) => line.trim() !== "" && !line.startsWith("#"))
-  .join("\n");
-if (
-  !activeDeployWorkflow.includes("workflow_dispatch:") ||
-  !activeDeployWorkflow.includes("if: ${{ false }}") ||
-  activeDeployWorkflow.includes("workflow_run:") ||
-  activeDeployWorkflow.includes("scripts/deploy-deno.mjs")
-) {
-  fail("deploy-deno.yml must remain a manually triggered disabled stub");
-}
-
-for (const workflow of ["deploy-site.yml", "deploy-demo.yml"]) {
-  const source = readFileSync(join(root, ".github/workflows", workflow), "utf8");
-  if (!source.includes("workflows: [ci]") || !source.includes("workflow_dispatch:")) {
-    fail(`${workflow} must support CI-gated and manual deployments`);
-  }
-}
-
 const expectedExports = {
   ".": "./src/server/index.ts",
   "./client": "./src/client/index.ts",

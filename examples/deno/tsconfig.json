@@ -8,8 +8,7 @@
     "jsx": "react-jsx",
     "jsxImportSource": "preact",
     "strict": true,
-    "noEmit": true,
-    "types": ["vite/client"]
+    "noEmit": true
   },
   "include": ["src", "server.tsx", "vite.config.ts"]
 }

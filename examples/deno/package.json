@@ -4,10 +4,6 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "deno task build",
-    "dev": "deno task dev",
-    "start": "deno task start",
-    "test": "deno task test",
     "e2e": "playwright test"
   },
   "dependencies": {

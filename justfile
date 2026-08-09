@@ -1,3 +1,4 @@
+# 利用できるタスクと説明を表示する
 default:
     @just --list
 
@@ -5,69 +6,34 @@ default:
 install:
     pnpm install
 
-# テストを 1 回流す
-test *ARGS:
-    pnpm exec vp test --run {{ ARGS }}
-
-# カバレッジ閾値を含むテスト
-coverage:
-    pnpm run coverage
-
-# テストを監視する
-watch:
+# テストを実行する
+test:
     pnpm exec vp test
 
-# フォーマット・lint・型検査（すべて vite-plus 同梱の oxfmt / oxlint / tsgolint）
+# カバレッジ閾値を含むテストを実行する
+coverage:
+    pnpm exec vp test run --coverage
+
+# format・lint・型検査を実行する
 check:
     pnpm exec vp check
 
-# フォーマットと lint の自動修正
+# format と lint の問題を自動修正する
 fix:
-    pnpm exec vp fmt
-    pnpm exec vp lint --fix
+    pnpm exec vp check --fix
 
-# ライブラリをビルドする（dist に ESM と .d.ts）
+# ライブラリをビルドする
 build:
-    pnpm run build
+    pnpm exec vp run build
 
-# 性能ベンチマーク
+# Node 24 baseline と性能を比較する
 bench:
-    pnpm run bench
+    pnpm exec vp run bench
 
-# publish されるパッケージの構造・型・サイズを検査
+# publish 対象の構造・型・サイズ・Vite peer を検証する
 package-check:
-    pnpm run package:check
+    pnpm exec vp run package:check
 
-# Workers デモの build とテスト
-demo:
-    pnpm run demo:build
-    pnpm --filter @zogan/shop cf-typegen:check
-    pnpm run demo:test
-
-# ライブラリ紹介サイトの production build
-site:
-    pnpm run site:build
-
-# Cloudflareへ送る両サイトのbundleを、公開せずに検証
-deploy-check:
-    pnpm run deploy:dry
-
-# レジストリ上の依存更新を確認
+# registry 上の依存更新を確認する
 deps-check:
-    pnpm run deps:check
-
-# Deno runtime、npm配布物、JSR、Denoサンプルを独立して検証
-deno-ci:
-    deno install --frozen --node-modules-dir=manual
-    pnpm run build
-    deno task deno:check
-    deno task deno:test
-    pnpm run package:check:deno
-    deno task deno:example:build
-    pnpm run deno:contract
-    deno task deno:jsr
-    pnpm run deno:e2e
-
-# CI で回す決定的な品質ゲート（benchmark と browser E2E は専用 job）
-# check は package.json の self-reference から dist を解決するため、clean checkout では build を先に行う。
-ci: build check coverage package-check site demo
+    pnpm exec vp run deps:check

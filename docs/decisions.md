@@ -1,74 +1,74 @@
-# Design decisions
+# 設計判断
 
-This record explains implementation choices that materially affect zogan's public contract. The specification remains authoritative.
+この記録では、zogan の公開契約に重大な影響を与える実装上の判断を説明します。正本は引き続き仕様書です。
 
-## Application setup and configuration ownership
+## アプリケーションのセットアップと設定の所有権
 
-The public setup API is `zogan(app, options)`. It installs the renderer middleware and associates options with that specific Hono instance. A `WeakMap` keyed by the app owns `fragmentPrefix` and other configuration; no module-global application configuration exists. This prevents two Hono apps in the same isolate from changing each other's fragment routes.
+公開セットアップ API は `zogan(app, options)` です。この API はレンダラーミドルウェアを組み込み、指定された Hono インスタンスにオプションを関連付けます。アプリケーションをキーとする `WeakMap` が `fragmentPrefix` などの設定を保持し、モジュール全体で共有されるアプリケーション設定は持ちません。これにより、同じ isolate 内にある 2 つの Hono アプリケーションが、互いの Fragment ルートを変更できないようにしています。
 
-Hono's `Env`, schema, and base-path generics are preserved by the return type. `PageHandler`, `FragmentHandler`, and renderer contracts are compile-tested.
+Hono の `Env`、スキーマ、ベースパスのジェネリクスは戻り値の型に保持されます。`PageHandler`、`FragmentHandler`、レンダラーの契約はコンパイルテストで検証します。
 
-## Public contract and implementation boundary
+## 公開契約と実装の境界
 
-The three public entries are `zogan`, `zogan/client`, and `zogan/vite`. They expose only the documented components, functions, and types. Marker parsing, renderer internals, import graph helpers, protocol parsing, registries, and test resets stay in implementation modules. Implementations may be regenerated or reorganized without changing the contract layer.
+公開エントリは `zogan`、`zogan/client`、`zogan/vite` の 3 つです。公開するのは文書化されたコンポーネント、関数、型だけです。マーカー解析、レンダラー内部、import グラフの補助関数、プロトコル解析、レジストリ、テスト用リセット処理は実装モジュール内に留めます。契約層を変えない限り、実装は再生成・再編成できます。
 
-## Dependency classification
+## 依存関係の分類
 
-- `hono`, `preact`, and `@preact/signals` are mandatory peers and development dependencies. The host application and zogan must use compatible shared runtime instances and types.
-- `preact-render-to-string` is a normal dependency because zogan imports it internally to implement SSR; applications should not need to install it directly.
-- Vite 8 is an optional peer. Only consumers of `zogan/vite` require it; earlier Vite majors are outside the compatibility contract.
-- Tooling versions are pinned through `package.json` and `pnpm-lock.yaml`; pre-release versions are not selected.
+- `hono`、`preact`、`@preact/signals` は必須の peer dependency かつ開発依存です。ホストアプリケーションと zogan は、互換性のあるランタイムインスタンスと型を共有する必要があります。
+- `preact-render-to-string` は、zogan が SSR の実装で内部的に import するため通常の依存です。アプリケーションが直接インストールする必要はありません。
+- Vite 8 は任意の peer dependency です。必要なのは `zogan/vite` の利用者だけで、それ以前の Vite メジャーバージョンは互換性契約の対象外です。
+- ツールのバージョンは `package.json` と `pnpm-lock.yaml` で固定し、プレリリース版は選びません。
 
-## Rendering markers
+## レンダリングマーカー
 
-Preact's string renderer cannot emit raw sibling comments through an ordinary component. SSR therefore emits render-scoped nonce sentinels, converts only matching sentinels to HTML comments, and strips unmatched control sequences. Marker ranges are parsed once and reused for partial extraction and snapshot checks.
+Preact の文字列レンダラーは、通常のコンポーネントから兄弟位置へ生のコメントを出力できません。そのため SSR では、レンダリング単位の nonce を含む番兵文字列を出力し、一致する番兵だけを HTML コメントへ変換したうえで、一致しない制御文字列を除去します。マーカー範囲は一度だけ解析し、Partial の抽出と snapshot の検査で再利用します。
 
-Partial modes travel in `X-Partial-Mode`; HTML markers remain limited to ordered region boundaries.
+Partial の mode は `X-Partial-Mode` で伝達し、HTML マーカーは順序付きの領域境界だけを表します。
 
-## HTTP safety boundary
+## HTTP の安全境界
 
-Cache-Control is parsed as directives, not substring-matched text. A successful HTML GET/HEAD containing a store snapshot requires an exact `no-store` directive. Development throws; production replaces the policy with `private, no-store` and warns.
+`Cache-Control` は部分文字列ではなくディレクティブとして解析します。Store の snapshot を含む成功した HTML の GET/HEAD 応答には、正確な `no-store` ディレクティブが必要です。開発環境では例外を投げ、本番環境ではポリシーを `private, no-store` に置き換えて警告します。
 
-Fragment, navigation, and form responses are validated for same origin, normalized prefix, manual redirects, HTML content type, ordered response headers, and body markers before any DOM mutation. Redirects always use `redirect: "manual"`.
+Fragment、ナビゲーション、フォームの応答は、DOM を変更する前に、同一オリジン、正規化された接頭辞、手動リダイレクト、HTML の Content-Type、順序付き応答ヘッダ、本文マーカーを検証します。リダイレクトには常に `redirect: "manual"` を指定します。
 
-## Client state and concurrency
+## クライアント状態と並行処理
 
-Navigation state, fragment coordination, island activation, and store registration have separate owners. Pure URL/header/body parsing is kept outside mutable registries.
+ナビゲーション状態、Fragment の調停、Island の有効化、Store の登録には、それぞれ別の所有者を設けます。URL・ヘッダ・本文の純粋な解析処理は、可変レジストリの外に置きます。
 
-Concurrent refreshes of the same canonical fragment URL share one request and fan out to every connected target. Island hydration receives an activation token; removing or replacing an island invalidates delayed work.
+同じ正規化済み Fragment URL に対する並行更新は 1 つのリクエストを共有し、接続中のすべての対象へ結果を配ります。Island のハイドレーションには有効化トークンを渡し、Island が削除・置換された場合は遅延処理を無効化します。
 
-## Vite analysis
+## Vite の解析
 
-Client-only reachability is based on lexer output and the Vite module graph, including named and namespace imports, dynamic imports, and re-export paths. Virtual island entries resolve from Vite's root, use absolute normalized paths internally, and reject ambiguous same-name files.
+クライアント専用モジュールへの到達可能性は、lexer の出力と Vite のモジュールグラフを基に判定します。名前付き import、名前空間 import、動的 import、再 export の経路も対象です。Island の仮想エントリは Vite のルートを基準に解決し、内部では正規化された絶対パスを使い、同名ファイルが複数ある曖昧な状態を拒否します。
 
-## Performance gate
+## 性能ゲート
 
-Vitest benchmarks cover SSR, partial extraction, snapshot scanning, DOM replacement, Store merge, and fragment fan-out. The committed baseline is measured on Node 26. A median regression greater than 20% fails comparison. This tolerance is intended to catch structural regressions while avoiding ordinary shared-runner noise.
+Vitest のベンチマークでは、SSR、Partial 抽出、snapshot 走査、DOM 置換、Store のマージ、Fragment の結果配布を測定します。リポジトリに保存する基準値は Node 24 Active LTS で計測します。中央値が 20% を超えて悪化した場合は比較を失敗させます。この許容幅は、共有ランナーで通常発生する揺らぎを許容しつつ、構造的な性能劣化を検出するためのものです。Node 26 Current は小規模な互換性ジョブで検証し、性能の基準にはしません。
 
-Published gzip limits are 12 KiB for the client, 7 KiB for the server, and 5 KiB for the Vite plugin.
+公開物の gzip 上限は、クライアントが 12 KiB、サーバーが 7 KiB、Vite プラグインが 5 KiB です。
 
-## Workers demonstration
+## Workers のデモ
 
-`examples/shop` is a workspace package that separates pure domain code, a D1 repository, Hono/Preact presentation, and client-owned optimistic state. It demonstrates public/private cache headers, cookie-scoped users, monotonic cart versions, full HTML fallback, local migrations and seed data, Workerd integration tests, Playwright flows, production build, and Wrangler dry-run. No deployment command is part of CI.
+`examples/shop` は、純粋なドメインコード、D1 リポジトリ、Hono/Preact のプレゼンテーション、クライアント所有の楽観状態を分離したワークスペースパッケージです。public/private のキャッシュヘッダ、Cookie 単位のユーザー、単調増加するカートバージョン、フル HTML へのフォールバック、ローカルのマイグレーションとシードデータ、Workerd 統合テスト、Playwright フロー、本番ビルド、Wrangler の dry-run を実演します。CI にデプロイコマンドは含めません。
 
-## README and introduction site
+## README と紹介サイト
 
-The repository README is the short adoption path, not a second copy of the specification. Its order follows the recurring pattern found in the public documentation of mizchi/similarity, Hono, Ky, Unhead, and esbuild: state the purpose, explain why the project exists, show a minimal runnable path, name the core concepts, and move detailed contracts into dedicated documentation.
+リポジトリの README は導入までの短い経路であり、仕様書の複製ではありません。その構成は mizchi/similarity、Hono、Ky、Unhead、esbuild の公開ドキュメントに共通する流れに従います。目的を示し、プロジェクトが必要な理由を説明し、実行可能な最小例を提示し、中核概念を挙げ、詳細な契約は専用ドキュメントへ移します。
 
-`examples/site` is a framework-free Vite build so the introduction can be hosted as static files and does not suggest that zogan requires a documentation framework. It uses the same hierarchy as the README, adds a visual response model, and keeps the Workers + D1 application as a concrete example instead of the main product definition. The source review is recorded in [README and introduction-site precedents](precedents.md).
+`examples/site` はフレームワークを使わない Vite ビルドです。これにより紹介ページを静的ファイルとしてホストでき、zogan がドキュメントフレームワークを必要とするという誤解も避けられます。README と同じ情報階層を使い、応答モデルの図を追加し、Workers + D1 アプリケーションは製品定義の中心ではなく具体例として扱います。参照元の調査は [README と紹介サイトの先例](precedents.md) に記録しています。
 
-## Cloudflare deployment
+## Cloudflare へのデプロイ
 
-Both public examples deploy as separate Cloudflare Workers. The introduction uses Workers Static Assets rather than the legacy Workers Sites feature or a framework adapter. The demo uses the Cloudflare Vite plugin, Worker SSR, generated Static Assets, and a production D1 binding.
+2 つの公開サンプルは、それぞれ独立した Cloudflare Workers としてデプロイします。紹介サイトには、旧式の Workers Sites 機能やフレームワークアダプターではなく Workers Static Assets を使います。デモには Cloudflare Vite プラグイン、Worker SSR、生成された Static Assets、本番用 D1 binding を使います。
 
-Deployment runs only after the main CI workflow succeeds for a push to `main`, or by explicit manual dispatch. The introduction and demo have separate protected GitHub environments but share a non-cancelling concurrency group. Production D1 migrations run before the demo deployment; seed data remains a one-time manual operation because re-seeding would overwrite mutable inventory. Cloudflare credentials stay in GitHub secrets, while the non-secret D1 resource ID remains in the Wrangler source-of-truth configuration.
+デプロイは、`main` への push に対するメイン CI ワークフローが成功した後、または明示的な手動実行時だけ行います。紹介サイトとデモには別々の保護された GitHub environments を設けますが、キャンセルを行わない共通の concurrency group を使います。本番 D1 のマイグレーションはデモのデプロイ前に実行します。再シードは変更可能な在庫を上書きするため、シードデータの投入は一度限りの手動操作とします。Cloudflare の認証情報は GitHub secrets に保存し、秘密ではない D1 リソース ID は正本である Wrangler 設定に保持します。
 
-## Deno, JSR, and Deno Deploy
+## Deno、JSR、Deno Deploy
 
-Deno 2.9 and later is a supported runtime. The root `deno.json` exposes the same server, client, and Vite entry points from TypeScript source under `@maya0513/zogan`; dependency ranges mirror npm peer compatibility through npm import mappings. `examples/deno` is a workspace member and resolves `zogan` to repository source, so it can be built before the JSR package exists.
+Deno 2.9 以降を対応ランタイムとします。ルートの `deno.json` は、`@maya0513/zogan` の TypeScript ソースから、サーバー、クライアント、Vite の同じエントリポイントを公開します。依存範囲は npm import mappings を通して npm の peer 互換性と一致させます。`examples/deno` はワークスペースメンバーで、`zogan` をリポジトリのソースへ解決するため、JSR パッケージが存在する前でもビルドできます。
 
-The Hono methods and request fields are intentionally expressed as module augmentation so existing `zogan(app); app.page(...)` code remains typed. JSR classifies any ambient module augmentation as a slow type and cannot publish it otherwise. Therefore the JSR dry-run uses `--allow-slow-types` only for this contract; removing the flag would require a breaking API that returns a different app type.
+既存の `zogan(app); app.page(...)` というコードの型を維持するため、Hono のメソッドとリクエストフィールドは意図的にモジュール拡張として表現します。JSR は ambient なモジュール拡張をすべて slow type と分類し、そのままでは公開できません。そのため JSR の dry-run では、この契約に限って `--allow-slow-types` を使います。このフラグを外すには、異なるアプリケーション型を返す破壊的 API 変更が必要です。
 
-Documentation linting still executes `deno doc --lint` across all three entries. Deno 2.9 reports peer-owned Hono, Preact, Signals, and Vite names as private because they are not re-exported from zogan. Re-exporting those dependencies would violate the deliberately narrow public surface. A strict wrapper accepts only the enumerated `private-type-ref` diagnostics for peer types and fails on missing documentation, missing return types, internal zogan types, or any new diagnostic.
+ドキュメントの lint では、引き続き 3 つのエントリすべてに `deno doc --lint` を実行します。Deno 2.9 は、zogan が Hono、Preact、Signals、Vite の名前を再 export していないため、peer が所有するそれらの名前を private と報告します。これらの依存を再 export すると、意図的に狭くした公開範囲に反します。厳格なラッパーは、peer 型について列挙済みの `private-type-ref` 診断だけを許可し、ドキュメント不足、戻り値型の不足、zogan 内部型、新しい診断があれば失敗します。
 
-Deno quality checks live in a separate `deno-ci` job and `just deno-ci`; they are not added to the Node `just ci` path. Deno Deploy uses a dynamic runtime configured in the root manifest and the new `deno deploy` CLI. Its GitHub environment and token are isolated from both Cloudflare deployments.
+Deno の品質検査は独立した `deno-ci` ジョブで行い、Node の通常品質検査には加えません。Deno Deploy はルートマニフェストから動的ランタイム、インストールコマンド、ビルドコマンドを読み取ります。本番ビルドを起動する唯一の経路は Deno Web コンソールで設定したリポジトリ連携であり、このリポジトリには Deno のデプロイワークフローもデプロイトークンの処理も含めません。

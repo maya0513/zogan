@@ -31,13 +31,12 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6
+      - uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 26
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run site:build
+          node-version: 24
+          cache: true
+      - run: vp install --frozen-lockfile
+      - run: vp run @zogan/site#build
       - name: Deploy Workers Static Assets
         id: deploy
         uses: cloudflare/wrangler-action@v4

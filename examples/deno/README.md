@@ -9,4 +9,4 @@ deno task start
 
 Open <http://localhost:8000>. Use `deno task dev` for the Vite development server and `deno task test` for the server integration tests.
 
-The production application is configured from the repository root and is published to <https://zogan-deno.maya0513.deno.net> after the repository CI succeeds.
+The production application is configured from the repository root and is published to <https://zogan-deno.maya0513.deno.net> by the GitHub repository connection configured in the Deno web console.

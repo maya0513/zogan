@@ -12,34 +12,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6
+      - uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 26
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: just
-      - run: just ci
-      - run: pnpm run bench
+          node-version: 24
+          cache: true
+      - run: vp install --frozen-lockfile
+      - run: vp run ci:quality
 
   browser:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6
+      - uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 26
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run build
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm run site:e2e
-      - run: pnpm run demo:e2e
-      - run: pnpm --filter @zogan/site deploy:dry
-      - run: pnpm --filter @zogan/shop deploy:dry
+          node-version: 24
+          cache: true
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+          cache: true
+      - run: vp install --frozen-lockfile
+      - run: vp exec playwright install --with-deps chromium
+      - run: vp run ci:browser
 
   deno-ci:
     name: Deno 2.9+ and JSR
@@ -47,33 +41,26 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6
+      - uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 26
-          cache: pnpm
+          node-version: 24
+          cache: true
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
           cache: true
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: just
-      - run: pnpm install --frozen-lockfile
-      - run: deno install --frozen --node-modules-dir=manual
-      - run: pnpm exec playwright install --with-deps chromium
-      - run: just deno-ci
+      - run: vp install --frozen-lockfile
+      - run: vp exec playwright install --with-deps chromium
+      - run: vp run ci:deno
 
-  vite-peer:
-    name: Vite 8 peer
+  node-current:
+    name: Node 26 compatibility
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6
+      - uses: voidzero-dev/setup-vp@v1
         with:
           node-version: 26
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run build
-      - run: pnpm run vite:peer:check
+          cache: true
+      - run: vp install --frozen-lockfile
+      - run: vp run ci:node-current

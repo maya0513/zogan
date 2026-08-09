@@ -1,63 +1,63 @@
-# Quality report
+# 品質レポート
 
-Measurements in this report are reproducible from the repository. Generated reports and current benchmark output are not treated as source-of-truth; commands fail when committed gates are missed.
+このレポートの測定値はリポジトリから再現できます。生成されたレポートや現在のベンチマーク出力は正本として扱いません。リポジトリに保存されたゲートを満たさない場合、コマンドは失敗します。
 
-## Test coverage
+## テストカバレッジ
 
-Command: `pnpm run coverage`
+コマンド：`just coverage`
 
-| Metric     | Measured | Required |
-| ---------- | -------: | -------: |
-| Statements |   98.01% |      95% |
-| Lines      |   99.16% |      95% |
-| Functions  |   99.43% |      95% |
-| Branches   |   94.07% |      90% |
+| 指標 | 測定値 | 必須値 |
+| ---- | -----: | -----: |
+| 文   | 98.01% |    95% |
+| 行   | 99.16% |    95% |
+| 関数 | 99.43% |    95% |
+| 分岐 | 94.07% |    90% |
 
-Cache enforcement, middleware safety boundaries, Store reconciliation, Fragment URL/fan-out behavior, and client-only reachability each require 100% statements, lines, functions, and branches through per-file thresholds.
+キャッシュの強制、ミドルウェアの安全境界、Store の整合、Fragment URL と結果配布の挙動、クライアント専用モジュールへの到達可能性については、ファイル単位のしきい値により、文・行・関数・分岐のすべてで 100% を要求します。
 
-## Performance baseline
+## 性能基準
 
-Command: `pnpm run bench`
+コマンド：`just bench`
 
-Environment: Node 26.6.0 on Linux x64. Files run serially; the comparison uses the median of three run medians and fails when it is more than 20% slower than the committed baseline.
+環境：Linux x64 上の Node 24.19.0。ファイルは直列に実行します。比較には 3 回の実行で得た中央値をさらに中央値にした値を使い、リポジトリに保存された基準値より 20% を超えて遅い場合は失敗します。
 
-| Benchmark                             |      Median |
-| ------------------------------------- | ----------: |
-| SSR: 100 products and 3 partials      | 0.151257 ms |
-| Partial extraction: 10 of 100 markers | 0.006250 ms |
-| Snapshot scan: rendered document      | 0.005941 ms |
-| DOM replacement: 20 product cards     | 1.099989 ms |
-| Store merge: versioned snapshot       | 0.000209 ms |
-| Fragment fan-out: 75 of 100 islands   | 0.383043 ms |
+| ベンチマーク                               |      中央値 |
+| ------------------------------------------ | ----------: |
+| SSR：100 商品と 3 個の Partial             | 0.088409 ms |
+| Partial 抽出：100 マーカー中の 10 個       | 0.005764 ms |
+| snapshot 走査：レンダリング済み文書        | 0.005015 ms |
+| DOM 置換：20 個の商品カード                | 0.558057 ms |
+| Store マージ：バージョン付き snapshot      | 0.000184 ms |
+| Fragment の結果配布：100 Island 中の 75 個 | 0.277454 ms |
 
-The machine-readable source is [`benchmarks/baseline.node26.json`](../benchmarks/baseline.node26.json).
+機械可読な正本は [`benchmarks/baseline.node24.json`](../benchmarks/baseline.node24.json) です。
 
-## Published bundle sizes
+## 公開物のバンドルサイズ
 
-Command: `pnpm run package:check`
+コマンド：`just package-check`
 
-| Entry          | Measured gzip |  Limit |
-| -------------- | ------------: | -----: |
-| `zogan/client` |     11.69 KiB | 12 KiB |
-| `zogan` server |      6.24 KiB |  7 KiB |
-| `zogan/vite`   |      3.87 KiB |  5 KiB |
+| エントリ         | gzip 測定値 |   上限 |
+| ---------------- | ----------: | -----: |
+| `zogan/client`   |   11.69 KiB | 12 KiB |
+| `zogan` サーバー |    6.24 KiB |  7 KiB |
+| `zogan/vite`     |    3.87 KiB |  5 KiB |
 
-The same command packs the actual tarball, runs publint and Are The Types Wrong, imports every JavaScript entry from the tarball, compiles type imports against it, and verifies optional-peer metadata.
+同じコマンドで実際の tarball を作成し、publint と Are The Types Wrong を実行します。さらに tarball 内のすべての JavaScript エントリを import し、それに対する型 import をコンパイルし、任意 peer dependency のメタデータを検証します。
 
-## Runtime and browser verification
+## ランタイムとブラウザの検証
 
-- Root unit, contract, and regression tests run with Vitest.
-- Workers/D1 integration tests run in Workerd with isolated D1 storage.
-- Playwright runs Chromium with JavaScript enabled and disabled.
-- `wrangler deploy --dry-run` validates the demo bundle without deploying it.
+- ルートの単体テスト、契約テスト、回帰テストは Vitest で実行します。
+- Workers/D1 の統合テストは、分離された D1 ストレージを使って Workerd で実行します。
+- Playwright は JavaScript の有効時と無効時の両方で Chromium を実行します。
+- `wrangler deploy --dry-run` は、デプロイを行わずにデモのバンドルを検証します。
 
-## Deno and JSR verification
+## Deno と JSR の検証
 
-Command: `just deno-ci`
+コマンド：`vp run ci:deno`
 
-- Deno 2.9+ checks and executes the server, DOM-free client import, and Vite entry.
-- A temporary Deno consumer imports, type-checks, and executes the packed npm tarball.
-- The JSR manifest version, export map, npm dependency mappings, source-only publish boundary, and npm/JSR runtime exports are compared automatically.
-- `deno publish --dry-run` validates the JSR upload without publishing it. The command permits slow types only because the documented Hono module augmentation is itself classified as a slow type by JSR.
-- Deno runs the Vite production build, and the resulting browser bundle is rejected if it contains a Node-only import.
-- Playwright verifies soft navigation and Island hydration with JavaScript, plus ordinary navigation without JavaScript.
+- Deno 2.9 以降で、サーバー、DOM を使わないクライアント import、Vite エントリを検査・実行します。
+- 一時的な Deno コンシューマーから、作成済み npm tarball を import し、型検査して実行します。
+- JSR マニフェストのバージョン、export map、npm 依存の mapping、ソースだけを公開する境界、npm/JSR のランタイム export を自動比較します。
+- `deno publish --dry-run` は、実際に公開せず JSR へのアップロードを検証します。このコマンドで slow type を許可するのは、文書化された Hono のモジュール拡張自体が JSR によって slow type に分類されるためです。
+- Deno で Vite の本番ビルドを実行し、生成されたブラウザバンドルに Node 専用 import が含まれていれば失敗させます。
+- Playwright で、JavaScript 有効時のソフトナビゲーションと Island のハイドレーション、および JavaScript 無効時の通常ナビゲーションを検証します。
