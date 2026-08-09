@@ -1,5 +1,18 @@
-# Disabled: production deploys are triggered by Deno Deploy's GitHub integration.
-# Keep this workflow commented out to avoid concurrent CLI and GitHub deployments.
+name: deploy-deno (disabled)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  disabled:
+    name: Deno Deploy uses the GitHub integration
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Deployment is managed by Deno Deploy's GitHub integration."
+
+# The former CLI deployment remains commented out below for reference.
+# Keep it commented out to avoid concurrent CLI and GitHub deployments.
 #
 # name: deploy-deno
 #

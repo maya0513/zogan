@@ -27,10 +27,17 @@ const deployWorkflow = readFileSync(join(root, ".github/workflows/deploy-deno.ym
 if (!deployWorkflow.includes("Deno Deploy's GitHub integration")) {
   fail("the disabled deployment workflow must document the GitHub integration");
 }
-for (const line of deployWorkflow.split(/\r?\n/)) {
-  if (line.trim() !== "" && !line.startsWith("#")) {
-    fail("deploy-deno.yml must remain fully commented out to prevent duplicate deployments");
-  }
+const activeDeployWorkflow = deployWorkflow
+  .split(/\r?\n/)
+  .filter((line) => line.trim() !== "" && !line.startsWith("#"))
+  .join("\n");
+if (
+  !activeDeployWorkflow.includes("workflow_dispatch:") ||
+  !activeDeployWorkflow.includes("if: ${{ false }}") ||
+  activeDeployWorkflow.includes("workflow_run:") ||
+  activeDeployWorkflow.includes("scripts/deploy-deno.mjs")
+) {
+  fail("deploy-deno.yml must remain a manually triggered disabled stub");
 }
 
 for (const workflow of ["deploy-site.yml", "deploy-demo.yml"]) {
