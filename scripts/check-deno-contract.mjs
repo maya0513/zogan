@@ -24,13 +24,16 @@ if (deno.deploy?.install !== "deno install --frozen --node-modules-dir=manual") 
 }
 
 const deployWorkflow = readFileSync(join(root, ".github/workflows/deploy-deno.yml"), "utf8");
-const syncConfigAt = deployWorkflow.indexOf("scripts/sync-deno-deploy-config.mjs");
-const deployAt = deployWorkflow.indexOf("scripts/deploy-deno.mjs");
-if (syncConfigAt < 0 || deployAt < 0 || syncConfigAt >= deployAt) {
-  fail("the deployment workflow must synchronize the app config before publishing");
+if (!deployWorkflow.includes("Deno Deploy's GitHub integration")) {
+  fail("the disabled deployment workflow must document the GitHub integration");
+}
+for (const line of deployWorkflow.split(/\r?\n/)) {
+  if (line.trim() !== "" && !line.startsWith("#")) {
+    fail("deploy-deno.yml must remain fully commented out to prevent duplicate deployments");
+  }
 }
 
-for (const workflow of ["deploy-site.yml", "deploy-demo.yml", "deploy-deno.yml"]) {
+for (const workflow of ["deploy-site.yml", "deploy-demo.yml"]) {
   const source = readFileSync(join(root, ".github/workflows", workflow), "utf8");
   if (!source.includes("workflows: [ci]") || !source.includes("workflow_dispatch:")) {
     fail(`${workflow} must support CI-gated and manual deployments`);
