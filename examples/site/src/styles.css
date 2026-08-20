@@ -535,8 +535,12 @@ h1 em,
   content: "";
 }
 
-.concept-partial::after {
+.concept-cache::after {
   background: #92ca2b;
+}
+
+.concept-page::after {
+  background: #4da8d4;
 }
 
 .concept-fragment::after {
@@ -545,10 +549,6 @@ h1 em,
 
 .concept-island::after {
   background: #ec7e43;
-}
-
-.concept-store::after {
-  background: #4da8d4;
 }
 
 .contract {
@@ -705,6 +705,11 @@ h1 em,
   padding: clamp(2rem, 5vw, 5rem);
   color: #161812;
   background: var(--green);
+}
+
+.example-card-secondary {
+  border-top: 1px solid rgba(22, 24, 18, 0.35);
+  background: var(--purple);
 }
 
 .example-kicker {

@@ -4,9 +4,9 @@ test("presents the library and a usable quick start", async ({ page }) => {
   await page.goto("/");
 
   await expect(page).toHaveTitle(/zogan/);
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Keep the whole page");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Render the page");
   await expect(
-    page.getByRole("heading", { name: "Four boundaries, one response model." }),
+    page.getByRole("heading", { name: "Four explicit boundaries. Nothing hidden." }),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Read the quick start" })).toHaveAttribute(
     "href",
@@ -14,6 +14,7 @@ test("presents the library and a usable quick start", async ({ page }) => {
   );
 
   const copyButton = page.getByRole("button", { name: "Copy install command" });
+  await expect(copyButton).toHaveAttribute("data-copy", "pnpm add zogan hono preact");
   await copyButton.click();
   await expect(copyButton).toHaveText("Copied");
 });

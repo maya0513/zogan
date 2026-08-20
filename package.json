@@ -1,7 +1,7 @@
 {
   "name": "zogan",
   "version": "0.0.0",
-  "description": "Partial rendering, islands, and soft navigation for Hono and Preact",
+  "description": "Explicit HTML fragments and typed islands for Hono and Preact",
   "license": "MIT",
   "workspaces": [
     "examples/*"
@@ -43,13 +43,11 @@
     }
   },
   "dependencies": {
-    "es-module-lexer": "^2.3.1",
     "preact-render-to-string": "^6.7.0"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.5",
     "@playwright/test": "^1.62.1",
-    "@preact/signals": "^2.11.0",
     "@types/node": "^24.0.0",
     "@vitest/coverage-v8": "^4.1.10",
     "happy-dom": "^20.11.1",
@@ -63,7 +61,6 @@
     "vitest": "4.1.10"
   },
   "peerDependencies": {
-    "@preact/signals": ">=2.11.0 <3",
     "hono": ">=4.13.0 <5",
     "preact": ">=10.29.8 <11",
     "vite": "^8.0.0"

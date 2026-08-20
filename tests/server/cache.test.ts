@@ -1,60 +1,83 @@
-import { describe, expect, test } from "vitest";
-import {
-  appendVary,
-  cacheControlDirectives,
-  containsStoreSnapshot,
-  hasCacheControlDirective,
-  isCacheableBySharedCache,
-  isHtmlContentType,
-  withHeader,
-} from "../../src/server/cache";
+import { describe, expect, expectTypeOf, test } from "vitest";
+import { cachePolicy, privateNoStore, publicCache, type CachePolicy } from "../../src/server/index";
+import { cachePolicyState, mergeVary } from "../../src/server/cache";
 
-describe("HTTP cache directive parser", () => {
-  test("directive 名を正確な token として解析する", () => {
-    expect([...cacheControlDirectives(null)]).toEqual([]);
-    expect([...cacheControlDirectives('public, Foo="a,b", no-store, , MAX-AGE=10')]).toEqual([
-      "public",
-      "foo",
-      "no-store",
-      "max-age",
-    ]);
-    expect(hasCacheControlDirective("NO-STORE", "no-store")).toBe(true);
-    expect(hasCacheControlDirective("no-storehouse", "no-store")).toBe(false);
-  });
-
-  test("共有 cache 可否は no-store/private の exact directive で決まる", () => {
-    expect(isCacheableBySharedCache(null)).toBe(true);
-    expect(isCacheableBySharedCache("public, max-age=60")).toBe(true);
-    expect(isCacheableBySharedCache("no-store")).toBe(false);
-    expect(isCacheableBySharedCache("private")).toBe(false);
-  });
-
-  test("HTML media type を case-insensitive に判定する", () => {
-    expect(isHtmlContentType("TEXT/HTML; Charset=UTF-8")).toBe(true);
-    expect(isHtmlContentType("application/xhtml+xml")).toBe(false);
-    expect(isHtmlContentType(null)).toBe(false);
-  });
-});
-
-describe("snapshot and response header helpers", () => {
-  test("snapshot script だけを検出する", () => {
-    expect(containsStoreSnapshot("<p>x</p>")).toBe(false);
-    expect(containsStoreSnapshot("<script>data-store</script>")).toBe(false);
-    expect(containsStoreSnapshot('<script data-store="x" type="text/plain"></script>')).toBe(false);
+describe("CachePolicy", () => {
+  test("public policy は安全な既定値と安定した directive 順を持つ", () => {
+    expect(cachePolicyState(publicCache())).toEqual({
+      value: "public, max-age=0",
+      vary: [],
+    });
     expect(
-      containsStoreSnapshot('<SCRIPT DATA-STORE="x" TYPE="application/json">{}</SCRIPT>'),
-    ).toBe(true);
+      cachePolicyState(
+        publicCache({
+          maxAge: 60,
+          sMaxAge: 300,
+          staleWhileRevalidate: 30,
+          immutable: true,
+          vary: ["Accept-Encoding", "Cookie"],
+        }),
+      ),
+    ).toEqual({
+      value: "public, max-age=60, s-maxage=300, stale-while-revalidate=30, immutable",
+      vary: ["Accept-Encoding", "Cookie"],
+    });
   });
 
-  test("Vary を重複させず追加する", () => {
-    expect(appendVary(null, "X-Partial")).toBe("X-Partial");
-    expect(appendVary(" Cookie, x-partial ", "X-Partial")).toBe("Cookie, x-partial");
+  test("privateNoStore と raw escape hatch を opaque policy にする", () => {
+    const privatePolicy = privateNoStore({ vary: ["Cookie"] });
+    const rawPolicy = cachePolicy("private, max-age=17", { vary: ["Authorization"] });
+    expectTypeOf(privatePolicy).toEqualTypeOf<CachePolicy>();
+    expectTypeOf(rawPolicy).toEqualTypeOf<CachePolicy>();
+    expect(cachePolicyState(privatePolicy)).toEqual({
+      value: "private, no-store",
+      vary: ["Cookie"],
+    });
+    expect(cachePolicyState(rawPolicy)).toEqual({
+      value: "private, max-age=17",
+      vary: ["Authorization"],
+    });
   });
 
-  test("immutable response headers は Response を作り直して更新する", () => {
-    const response = Response.redirect("https://example.com/next", 302);
-    const updated = withHeader(response, "Cache-Control", "no-store");
-    expect(updated.status).toBe(302);
-    expect(updated.headers.get("Cache-Control")).toBe("no-store");
+  test.each([
+    [{ maxAge: -1 }, "maxAge"],
+    [{ maxAge: 1.5 }, "maxAge"],
+    [{ maxAge: Number.NaN }, "maxAge"],
+    [{ maxAge: Number.POSITIVE_INFINITY }, "maxAge"],
+    [{ sMaxAge: -1 }, "sMaxAge"],
+    [{ staleWhileRevalidate: -1 }, "staleWhileRevalidate"],
+  ] as const)("duration を非負有限整数に限定する: %o", (options, field) => {
+    expect(() => publicCache(options)).toThrow(field);
+  });
+
+  test("raw policy の空値と header injection を拒否する", () => {
+    expect(() => cachePolicy("")).toThrow(/empty/i);
+    expect(() => cachePolicy("   ")).toThrow(/empty/i);
+    expect(() => cachePolicy("public\r\nX-Evil: yes")).toThrow(/CR|LF|line/i);
+  });
+
+  test.each(["public\0", "public\u0001", "public\u007F", "public😀"])(
+    "raw policy の不正な HTTP field-value 文字を拒否する: %j",
+    (value) => expect(() => cachePolicy(value)).toThrow(/field value/i),
+  );
+
+  test("raw policy は HTAB、visible ASCII、obs-text を許可する", () => {
+    expect(cachePolicyState(cachePolicy("\tpublic, extension=é\t"))).toEqual({
+      value: "public, extension=é",
+      vary: [],
+    });
+  });
+
+  test.each(["", "   ", "Cookie\r\nX-Evil: yes", "Accept Language", "Cookie, Origin"])(
+    "不正な Vary token を拒否する: %j",
+    (token) => expect(() => publicCache({ vary: [token] })).toThrow(/vary/i),
+  );
+
+  test("Vary token を case-insensitive に merge し、最初の表記と順序を保つ", () => {
+    expect(mergeVary("Accept-Encoding, cookie", ["Cookie", "Origin", "origin"])).toBe(
+      "Accept-Encoding, cookie, Origin",
+    );
+    expect(mergeVary(null, [])).toBeNull();
+    expect(mergeVary("*", ["Cookie"])).toBe("*");
   });
 });

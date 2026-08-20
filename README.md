@@ -2,139 +2,135 @@
 
 [English](README.md) | [日本語](README.ja.md)
 
-> Server-rendered pages with precise update and cache boundaries for Hono and Preact.
+> Explicit HTML responses and typed islands for Hono and Preact.
 
-zogan keeps the HTML request-response cycle at the center of an application. A page can return a full document, one or more named regions, or an independently cached fragment from the same Hono and Preact code. Browser navigation and islands are progressive enhancements; links and forms continue to work without JavaScript.
+zogan keeps the server-rendered request/response cycle small and visible. Routes explicitly return either a complete Page or raw Fragment HTML, every HTML response carries an opaque CachePolicy, and only declared Islands run in the browser. The browser continues to own links, forms, navigation, and history.
 
 > [!IMPORTANT]
-> zogan is pre-release software. The public contract is tested, but breaking changes may be made before 1.0.
+> zogan is pre-release software. Breaking changes may be made before 1.0.
 
 ## Why zogan?
 
-Hono provides routing and Web-standard responses. Preact provides components and hydration. zogan connects the space between them without becoming a router, data loader, or application framework:
+Hono already routes Web-standard requests. Preact already renders components. zogan adds a narrow boundary between them without becoming an application framework:
 
-- render a full page and named partials through one handler;
-- give user-specific and public fragments separate cache policies;
-- hydrate only the components that need browser behavior;
-- reconcile versioned server state without owning domain logic;
-- enhance same-origin links and forms while preserving native fallback.
+- one URL has one declared representation;
+- Page and Fragment routes are ordinary Hono routes;
+- every HTML response requires an explicit cache policy;
+- FragmentSlot updates only an explicitly marked region;
+- typed Islands receive validated JSON props and load lazily;
+- links, forms, redirects, and history retain native browser behavior.
 
-The application still owns routing, data access, authorization, and cache infrastructure. zogan owns the rendering protocol and validates it before changing the DOM.
+Your application owns routes, data access, authorization, mutations, and domain state. zogan owns HTML response factories and the activation of explicit Fragment and Island markers.
 
-## Quick start
+## Install
 
-Install zogan with the runtimes it shares with your application:
+Install zogan with the runtimes shared with your application:
 
 ```sh
-pnpm add zogan hono preact @preact/signals
+pnpm add zogan hono preact
+```
+
+Install Vite only when using the optional lazy-Island entry generator:
+
+```sh
 pnpm add -D vite
 ```
 
-With Deno 2.9 or later, install the JSR package and its shared npm runtimes:
+With Deno 2.9 or later:
 
 ```sh
-deno add jsr:@maya0513/zogan npm:hono npm:preact npm:@preact/signals
+deno add jsr:@maya0513/zogan npm:hono npm:preact
 ```
 
-The same three entry points are available as `@maya0513/zogan`, `@maya0513/zogan/client`, and `@maya0513/zogan/vite`.
+The JSR package exposes `@maya0513/zogan`, `@maya0513/zogan/client`, and `@maya0513/zogan/vite`, corresponding to the npm entry points `zogan`, `zogan/client`, and `zogan/vite`.
 
-Configure a Hono app and register a page:
+## Quick start
+
+Create response helpers once, then use normal Hono routes. The third argument to both `page()` and `fragment()` is mandatory.
 
 ```tsx
+import type { ComponentChildren } from "preact";
 import { Hono } from "hono";
-import { Partial, zogan } from "zogan";
+import { getCookie } from "hono/cookie";
+import {
+  createZogan,
+  defineIsland,
+  FragmentSlot,
+  Island,
+  privateNoStore,
+  publicCache,
+} from "zogan";
+import Counter, { type CounterProps } from "./islands/Counter";
+
+const Layout = ({ children }: { children?: ComponentChildren }) => (
+  <html lang="en">
+    <head>
+      <meta charSet="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <title>My app</title>
+    </head>
+    <body>
+      {children}
+      <script type="module" src="/src/client.ts" />
+    </body>
+  </html>
+);
 
 const app = new Hono();
+const zogan = createZogan({ layout: Layout });
+const counter = defineIsland<CounterProps>({ id: "Counter", component: Counter });
 
-zogan(app, {
-  layout: ({ children }) => (
-    <html>
-      <body data-client-nav>{children}</body>
-    </html>
-  ),
-});
-
-app.page("/articles", (c) => {
-  const page = Number(c.req.query("page") ?? 1);
-  c.header("Cache-Control", "public, max-age=0, s-maxage=60");
-
-  return c.render(
+app.get("/", (c) =>
+  zogan.page(
+    c,
     <main>
-      <Partial name="articles">
-        <ArticleList page={page} />
-      </Partial>
-      <a href={`/articles?page=${page + 1}`} data-partial="articles">
-        Next page
-      </a>
+      <h1>My app</h1>
+      <a href="/about">About</a>
+      <form action="/search" method="get">
+        <input name="q" />
+        <button type="submit">Search</button>
+      </form>
+      <FragmentSlot as="span" src="/fragments/cart-badge">
+        <a href="/cart">Cart —</a>
+      </FragmentSlot>
+      <Island of={counter} props={{ initial: 0 }} trigger="visible" />
     </main>,
-  );
+    { cache: publicCache({ sMaxAge: 60, staleWhileRevalidate: 300 }) },
+  ),
+);
+
+app.get("/fragments/cart-badge", (c) => {
+  const count = getCookie(c, "cart_count") ?? "0";
+  return zogan.fragment(c, <a href="/cart">Cart {count}</a>, {
+    cache: privateNoStore({ vary: ["Cookie"] }),
+  });
 });
 
 export default app;
 ```
 
-Start the browser runtime once:
+The Fragment endpoint returns only the children that replace the slot contents. It does not return a document or repeat the `<span>` wrapper.
 
-```ts
-import { start } from "zogan/client";
-
-start({ islands: {} });
-```
-
-The link is an ordinary link until the client starts. After that, zogan requests `articles`, verifies the response contract, and replaces only the marked region.
-
-## The rendering model
-
-```text
-ordinary request ────────────────> full HTML document
-X-Partial: results ──────────────> named regions from the same page
-GET /_f/account-summary ─────────> independently cached HTML fragment
-data-island="AccountMenu" ───────> selective Preact hydration
-```
-
-### Partial
-
-`<Partial name="results">` marks a region produced by a page handler. Links and GET forms with `data-partial="results"` request that region without introducing a second data-loading path.
-
-### Fragment
-
-`app.fragment()` registers a small HTML endpoint below `/_f/` by default. A fragment has its own `Cache-Control` policy and can be shared by multiple islands with one in-flight request.
+Define the component in `src/islands/Counter.tsx`. `defineIsland()` renders this component on the server and makes its exact props type flow into `<Island>`.
 
 ```tsx
-app.fragment("account-summary", async (c) => {
-  const account = await readAccount(c);
-  c.header("Cache-Control", "private, no-store");
-  c.header("Vary", "Cookie");
-  return c.render(<AccountSummary account={account} />);
-});
+import { useState } from "preact/hooks";
+import type { JsonObject } from "zogan";
+
+export type CounterProps = JsonObject & {
+  readonly initial: number;
+};
+
+export default function Counter({ initial }: CounterProps) {
+  const [count, setCount] = useState(initial);
+  return <button onClick={() => setCount((value) => value + 1)}>Count {count}</button>;
+}
 ```
 
-### Island
-
-`<Island>` sends useful server-rendered HTML first, then hydrates a named Preact component on load, idle, visibility, a media query, or an explicit trigger. Component lookup stays in the client entry so client-only code does not have to enter the server graph.
-
-```tsx
-<Island name="AccountMenu" fragment="/_f/account-summary" trigger="visible">
-  <a href="/account">Account</a>
-</Island>
-```
+Configure the optional Vite plugin. The filename stem `Counter` is the lazy-loader ID and must exactly match the server descriptor ID `"Counter"`; the module's default export is the browser component.
 
 ```ts
-import { start } from "zogan/client";
-import AccountMenu from "./islands/AccountMenu";
-
-start({ islands: { AccountMenu } });
-```
-
-### Store
-
-`clientStore()` exposes a read-only signal containing the latest server-confirmed value. `<StoreSnapshot>` updates it only when the numeric version increases. Optimistic changes and business rules remain application state.
-
-## Vite integration
-
-The optional Vite plugin generates island entries and prevents client-only store modules from becoming reachable from a server bundle, including through dynamic imports and re-export chains.
-
-```ts
+// vite.config.ts
 import { defineConfig } from "vite";
 import { zoganVite } from "zogan/vite";
 
@@ -143,19 +139,90 @@ export default defineConfig({
 });
 ```
 
-Vite is optional unless the `zogan/vite` entry is used.
+Import the generated entry once from the browser entry. The generated module itself calls `start()` and registers dynamic-import loaders; an Island module is not requested until its trigger fires. The named import and `void` expression below only keep strict no-side-effect-import lint rules satisfied.
 
-## Failure and cache boundaries
+```ts
+// src/client.ts
+import { islands } from "virtual:zogan/islands";
 
-Every successful page and fragment handler sets `Cache-Control` explicitly. Responses containing a store snapshot require an exact `no-store` directive. Before any DOM update, the browser runtime checks origin, redirect behavior, content type, protocol headers, requested markers, and fragment prefix. An invalid enhanced response falls back to ordinary browser behavior.
+void islands;
+```
 
-This is deliberately stricter than a general-purpose HTML fetch helper. See the [HTTP and DOM contract](docs/spec/appendix-b-markup.md) before adding a proxy or cache in front of zogan responses.
+Add an ambient declaration for the virtual module:
+
+```ts
+// src/virtual.d.ts
+declare module "virtual:zogan/islands" {
+  export const islands: Readonly<Record<string, import("zogan/client").IslandLoader>>;
+}
+```
+
+Without the Vite plugin, start the browser runtime with an explicit loader map instead:
+
+```ts
+import { start } from "zogan/client";
+
+start({ islands: { Counter: () => import("./islands/Counter") } });
+```
+
+## The model
+
+| Boundary | Server contract                                                                             | Browser contract                                                    |
+| -------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Cache    | Construct an opaque `CachePolicy`; pass it to every Page and Fragment response.             | Normal HTTP caching applies; zogan adds no client cache.            |
+| Page     | `zogan.page(c, vnode, { cache })` returns a doctype, optional layout, and complete HTML.    | The browser navigates to it normally.                               |
+| Fragment | An explicit route returns raw HTML with `zogan.fragment(c, vnode, { cache })`.              | A matching `FragmentSlot` may replace only its own children.        |
+| Island   | `defineIsland()` or `defineClientIsland()` declares an ID, mode, component, and props type. | The matching lazy module hydrates or mounts when its trigger fires. |
+
+### CachePolicy
+
+`CachePolicy` is opaque so a route cannot accidentally omit or casually construct its cache behavior.
+
+- `publicCache({ maxAge, sMaxAge, staleWhileRevalidate, immutable, vary })` creates a shared-cache policy. `maxAge` defaults to `0`.
+- `privateNoStore({ vary })` produces `private, no-store` for user-specific HTML.
+- `cachePolicy(value, { vary })` is the validated escape hatch for other directives.
+
+`Vary` names from a policy are merged case-insensitively with values already present on the Hono context.
+
+### Page and Fragment
+
+`createZogan({ layout })` returns stateless `page` and `fragment` response factories. It does not register routes or modify Hono. A Page uses the optional layout and starts with a doctype; a Fragment is raw HTML and never uses the layout.
+
+Give each Fragment its own root-relative, same-origin URL. `<FragmentSlot>` renders its children as a useful server fallback, then may fetch that URL on `load`, `idle`, `visible`, `manual`, or `media:…`. `load` is the default. Use `as` to choose a supported HTML container and pass normal DOM attributes as needed.
+
+`refreshFragment(src)` from `zogan/client` reloads all connected slots whose source exactly equals `src`. A `manual` slot changes only through this call.
+
+### Typed Island
+
+`defineIsland({ id, component })` uses `hydrate` mode and server-renders `component`. `defineClientIsland({ id, fallback })` uses `mount` mode and server-renders `fallback`. `<Island>` always emits a fixed `<div>` owner.
+
+Island props are required and must be a plain JSON object: nested arrays and plain objects are accepted; cycles, `undefined`, functions, symbols, bigint, non-finite numbers, and class instances are rejected. Activation triggers are `load`, `idle`, `visible`, and `media:…`.
+
+The descriptor checks server rendering and `<Island>` props at compile time. Runtime lookup is intentionally explicit: the descriptor ID must match a registered loader ID, which the Vite plugin derives from each `src/islands/*.tsx` filename.
+
+## Native baseline and failure behavior
+
+zogan does not intercept links or forms and does not manage browser history. Build complete Pages, use ordinary form actions, and use redirects such as POST/Redirect/GET after successful mutations. The application remains usable when JavaScript is disabled.
+
+Fragment and Island enhancement is fail-closed. A bad URL, redirect, non-success status, wrong content type, invalid marker, loader error, or render error leaves or restores the server fallback. Nested owners are rejected rather than being updated ambiguously.
+
+An interactive Island can enhance a native form with an application JSON endpoint, then refresh a related Fragment. But a failed POST cannot distinguish a pre-commit failure from a lost response after commit. Never replay the native form automatically after dispatch; either ask the user to reload or use an idempotency key shared by the API and native route. With JavaScript disabled, the first submission is native from the start:
+
+```ts
+try {
+  const response = await updateApplicationState();
+  if (!response.ok) throw new Error(`unexpected response ${response.status}`);
+  await refreshFragment("/fragments/cart-badge");
+} catch {
+  showReloadRequired();
+}
+```
 
 ## Examples
 
-- [Introduction site](examples/site) — a compact guide to the rendering model and adoption path.
-- [Workers + D1 shop](examples/shop) — browsing, filtering, private cart state, simulated checkout, cache policies, and JavaScript-disabled flows.
-- [Deno example](examples/deno) — dynamic SSR, partial navigation, a Fragment, an Island, and a Store on Deno. [Live demo](https://zogan-deno.maya0513.deno.net)
+- [Introduction site](examples/site) — the Cache, Page, Fragment, and Island model at a glance.
+- [Workers + D1 shop](examples/shop) — public product Pages, private cart HTML, native filtering and mutation flows, and an optional Add-to-Cart Island.
+- [Deno example](examples/deno) — explicit Page and Fragment routes plus hydrated and client-only Islands. [Live demo](https://zogan-deno.maya0513.deno.net)
 
 ## Documentation
 
@@ -165,16 +232,15 @@ This is deliberately stricter than a general-purpose HTML fetch helper. See the 
 
 ## Compatibility
 
-- Hono 4.13+
-- Preact 10.29+
-- `@preact/signals` 2.11+
-- Vite 8 for `zogan/vite`
+- Hono `>=4.13.0 <5`
+- Preact `>=10.29.8 <11`
+- Vite `^8.0.0` when using `zogan/vite` (optional)
 - Deno 2.9+ for the JSR package and Deno example
-- Node.js 24.11+ for development and packaging
+- Node.js 24.11+ for npm development and packaging
 - standards-based server runtimes supported by Hono
 - ESM only
 
-`hono`, `preact`, and `@preact/signals` are peer dependencies so zogan and the host application share their runtimes and types. `preact-render-to-string` is an internal implementation dependency and is installed with zogan.
+`hono` and `preact` are peer dependencies. `vite` is an optional peer dependency. `preact-render-to-string` is installed as zogan's internal rendering dependency.
 
 ## License
 

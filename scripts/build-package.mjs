@@ -22,6 +22,7 @@ try {
     "--out-dir",
     "dist",
     "--no-dts",
+    "--minify",
   ]);
 
   for (const entry of ["server", "client"]) {
@@ -31,15 +32,7 @@ try {
     cpSync(join(output, "index.d.ts"), join(root, "dist", entry, "index.d.ts"));
   }
 
-  run([
-    "src/vite/index.ts",
-    "--platform",
-    "node",
-    "--out-dir",
-    "dist/vite",
-    "--deps.never-bundle",
-    "es-module-lexer",
-  ]);
+  run(["src/vite/index.ts", "--platform", "node", "--out-dir", "dist/vite"]);
 
   for (const [javascript, types] of [
     ["dist/server/index.js", "./index.d.ts"],

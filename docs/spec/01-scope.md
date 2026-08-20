@@ -1,57 +1,58 @@
 # §1 スコープ
 
-**作るもの**：Hono のルート定義に「キャッシュ境界」と「ハイドレーション境界」を宣言できる薄い層。クライアントは部分 HTML を取得して DOM を差し替える。
+## 1.1 提供するもの
 
-**作らないもの**（意識的に切る）：
+zogan は次の3境界だけを提供する。
 
-- ネストルート / ルート階層の loader
-- pending UI, deferred data, race 制御の抽象化
-- クライアントサイドのルートマッチング木（Hono のルーターをそのまま使う）
-- SPA 的な完全クライアント遷移
-- react-router / TanStack Router API 互換
+1. Hono `Context` とPreact `VNode` から、cache policy付きのpageまたはFragment responseを作る。
+2. server HTMLへ `FragmentSlot` と型付き `Island` markerを出力する。
+3. browserで明示markerだけをscanし、Fragment取得とIsland起動を行う。
 
-判断基準は、サーバーレンダリングされたHTMLに更新境界を追加するために必要かどうかです。react-router互換を目標に据えて対象範囲を広げません。
+Vite integrationを使う場合は、さらに次を提供する。
 
-**前提スタック**：Hono / Preact 10.x / `@preact/signals`（必須peer）/ Vite 8（任意）/ Node.jsまたはDeno
+- `islandsDir` 直下の `*.tsx` をID別dynamic importへ変換するclient entry
+- 明示したclient-only moduleがSSR entryから到達する事故のbuild-time診断
 
----
+## 1.2 提供しないもの
 
-## 1.1 なぜ「作らないもの」がこの並びなのか
+- client router、route tree、route loader
+- link click、form submit、browser historyの代行
+- page全体のDOM差し替え、head merge、scroll/focus復元
+- application state container、楽観更新、server data同期
+- action/RPC abstraction、request mutation protocol
+- authentication、authorization、CSRF対策
+- CDN、response cache、revalidation daemon
+- HTML sanitization
+- polling、prefetch、streaming、push更新
+- nested Island ownership
+- arbitrary SVG/MathML/template/custom-element contextへのFragment挿入
 
-切り捨てた5つは、どれも一般的なSPAフレームワークなら持っているものです。zoganのHTML中心の責務に不要と判断した理由を残します。
+必要なbusiness stateはアプリが通常のserver route、Cookie、database、Island内部stateとして所有する。zogan module scopeへrequest固有値を置かない。
 
-| 切ったもの | 一般に必要とされる理由 | zoganで扱わない理由 |
-|---|---|---|
-| ネストルート / 階層 loader | ダッシュボードのような多段レイアウトで、階層ごとに独立してデータを取りたい | ルートとデータ取得はHonoとアプリケーションが所有する。更新境界には[§3](03-partial.md)のPartialを複数置ける |
-| pending UI / deferred data の抽象化 | 遅いデータを後追いで流し込みたい | Fragmentと[§6](06-island.md)のtriggerで必要な領域を遅延取得できる。ストリーミングの状態管理は対象外 |
-| race 制御の抽象化 | 複数の非同期処理の順序保証 | 必要なのは「最後のナビゲーションだけを適用する」の 1 パターンのみ。AbortController 1 本で済む（[§7.3](07-client-runtime.md)） |
-| クライアント側ルートマッチング木 | 遷移先を JS だけで解決したい | zogan は遷移のたびにサーバへ fetch する。行き先を予測する必要がない。ルート定義の二重管理はバグの温床 |
-| SPA 的な完全クライアント遷移 | 体感速度 | 通常のHTML遷移を常にフォールバックとして残すという設計と両立しない |
-| react-router / TanStack 互換 API | 移行のしやすさ | 互換を目標にすると、上 5 つを全部作ることになる |
+## 1.3 アプリ側の責務
 
-最後の行が実質的な結論です。**API 互換は他の全部を引きずり込む**ため、最初に切っています。
-
-## 1.2 スコープの境界にある判断
-
-「作らない」とまでは言い切らないが、**優先度を下げている**もの。
-
-| 項目 | 扱い |
+| 責務 | 理由 |
 |---|---|
-| 型安全リンク（Hono のルート型からリンク先を導く） | 有用だが必須ではない。[§9](09-roadmap.md) の段階 3 まで動いてから着手する |
-| prefetch | [§11](11-open-questions.md) の未決定事項。実装しながら決める |
-| View Transitions | 任意。あれば使う程度の扱い（[§7.3](07-client-runtime.md)） |
-| `BroadcastChannel` によるタブ間同期 | 複数タブでの回遊が想定されるなら推奨。未実装ならずれは次のフルロードまで残る（[§8.2](08-edge-cases.md)） |
+| Hono routeを登録する | `createZogan()` はrouterを変更しない |
+| page URLとFragment URLを分ける | 1 URL 1表現を守るため |
+| 各responseへ正しい `CachePolicy` を選ぶ | zoganは内容がpublicかprivateか判断できない |
+| public pageからユーザ固有値を除く | cache leakageはHTML生成時のデータ選択で決まる |
+| Fragment responseをtrusted same-origin HTMLに限定する | client runtimeはsanitizerではない |
+| link/formのnative経路を完成させる | JavaScriptがなくても操作可能にするため |
+| mutation後に必要なら `refreshFragment()` を呼ぶ | zoganはapplication eventを推測しない |
+| Island ID、filename、props schemaをdeploy間で管理する | runtimeにprotocol negotiationはない |
 
-## 1.3 前提スタックの制約
+## 1.4 前提環境
 
-| 依存 | バージョン | 備考 |
-|---|---|---|
-| Hono | 4.x | ルーター、`Context`、JSX ランタイムを使う |
-| Preact | **10.x 固定** | 11 は beta のため使わない |
-| `@preact/signals` | 必須依存 | [§5](05-store.md) の Store と [§7.3](07-client-runtime.md) の `navigating` が同じ signal 基盤に乗る。オプションにはできない |
-| Vite | 5.x–8.x | `zogan/vite`を使う場合だけ必要 |
-| Deno | 2.9以降 | JSR版、動的SSR、Vite dev/buildを検証する |
+- Hono `>=4.13 <5`
+- Preact `>=10.29.8 <11`
+- ESM
+- Node.js `>=24.11` を開発・package基準とする
+- Vite `^8` は `zogan/vite` を使う場合だけ必要
+- Deno向けsource entryも同じ公開APIを持つ
 
-`@preact/signals` を**必須依存**にしているのは意図的です。Store とローディング表示を同じ基盤に乗せることで、ローディング用の追加機構が要らなくなります（[§7.3](07-client-runtime.md)）。signals を optional にすると、その分岐が両方の章に染み出します。
+`preact-render-to-string` は実装dependencyである。browser state libraryは前提にしない。
 
-Node.js、Cloudflare Workers、Deno 2.9以降を正式な実行対象とします。すべてのサーバー契約はWeb標準の`Request`／`Response`を境界にします。
+## 1.5 採用判断
+
+zoganへ機能を追加する条件は、既存の局所境界をより明示し、安全にすることに限る。document全体の時間順序、server/client間の暗黙な共有状態、別表現を選ぶ隠れたrequest条件が増える変更は対象外である。

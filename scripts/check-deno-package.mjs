@@ -30,15 +30,7 @@ try {
   mkdirSync(modules, { recursive: true });
   cpSync(join(temporary, "package"), join(modules, "zogan"), { recursive: true });
 
-  for (const dependency of [
-    "@preact/signals",
-    "@types/node",
-    "es-module-lexer",
-    "hono",
-    "preact",
-    "preact-render-to-string",
-    "vite",
-  ]) {
+  for (const dependency of ["@types/node", "hono", "preact", "preact-render-to-string", "vite"]) {
     const target = realpathSync(join(root, "node_modules", dependency));
     const destination = join(modules, dependency);
     mkdirSync(join(destination, ".."), { recursive: true });
@@ -52,7 +44,6 @@ try {
         private: true,
         type: "module",
         dependencies: {
-          "@preact/signals": "2.11.0",
           hono: "4.13.1",
           preact: "10.29.8",
           zogan: "0.0.0",
@@ -75,20 +66,22 @@ try {
     [
       'import { Hono } from "hono";',
       'import { h } from "preact";',
-      'import { Partial, zogan, type ZoganOptions } from "zogan";',
-      'import { start, type StartOptions } from "zogan/client";',
+      'import { cachePolicy, createZogan, defineClientIsland, defineIsland, FragmentSlot, Island, privateNoStore, publicCache, type CachePolicy, type IslandDescriptor, type ZoganOptions } from "zogan";',
+      'import { refreshFragment, start, type StartOptions } from "zogan/client";',
       'import { zoganVite, type ZoganPluginOptions } from "zogan/vite";',
       'const layout: NonNullable<ZoganOptions["layout"]> = ({ children }) => h("html", null, children);',
+      "type Types = [CachePolicy, IslandDescriptor];",
+      "void (null as unknown as Types);",
       "const app = new Hono();",
-      "zogan(app, { layout, dev: true });",
-      'app.page("/", (c) => { c.header("Cache-Control", "public, max-age=0"); return c.render(h("main", null, "Deno")); });',
+      "const z = createZogan({ layout });",
+      'app.get("/", (c) => z.page(c, h("main", null, h(FragmentSlot, { src: "/fragments/status" }, "Deno")), { cache: publicCache() }));',
       'Deno.test("packed npm artifact", async () => {',
       '  const response = await app.request("http://localhost/");',
       '  if (response.status !== 200 || !(await response.text()).includes("Deno")) throw new Error("SSR failed");',
       "});",
       "const startOptions: StartOptions = { islands: {} };",
       "const viteOptions: ZoganPluginOptions = {};",
-      "void [Partial, start, startOptions, zoganVite(viteOptions)];",
+      "void [cachePolicy, defineClientIsland, defineIsland, Island, privateNoStore, refreshFragment, start, startOptions, zoganVite(viteOptions)];",
     ].join("\n"),
   );
 
@@ -97,7 +90,7 @@ try {
   const manifest = JSON.parse(readFileSync(join(temporary, "package", "package.json"), "utf8"));
   for (const entry of [".", "./client", "./vite"]) {
     if (typeof manifest.exports?.[entry]?.types !== "string") {
-      throw new Error(`packed manifest is missing Deno-readable types for ${entry}`);
+      throw new TypeError(`packed manifest is missing Deno-readable types for ${entry}`);
     }
   }
   console.log(`Deno package smoke passed: ${archive}`);

@@ -1,12 +1,5 @@
-import { clientStore } from "zogan/client";
+import type { PageStatusProps } from "../island-props.ts";
 
-interface PageState {
-  version: number;
-  page: number;
-}
-
-const page = clientStore<PageState>("page", { version: 0, page: 1 });
-
-export default function PageStatus(): preact.JSX.Element {
-  return <output aria-live="polite">Confirmed page: {page.value.page}</output>;
+export default function PageStatus({ page }: PageStatusProps): preact.JSX.Element {
+  return <output aria-live="polite">Confirmed page: {page}</output>;
 }

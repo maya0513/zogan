@@ -3,168 +3,140 @@ import {
   findServerReachPath,
   formatReachError,
   hasClientOnlyDirective,
-  importsClientStore,
   matchesGlob,
 } from "../../src/vite/client-only";
 
-describe("§5.3.2 判定は clientStore の named import", () => {
-  test("clientStore を named import しているモジュールは client-only", () => {
-    expect(importsClientStore("import { clientStore } from 'zogan/client'")).toBe(true);
-    expect(
-      importsClientStore(
-        'import { signal } from "@preact/signals"\nimport { clientStore, navigating } from "zogan/client"',
-      ),
-    ).toBe(true);
-    expect(importsClientStore("import { clientStore as base } from 'zogan/client'")).toBe(true);
-    expect(importsClientStore("import {\n  clientStore,\n} from 'zogan/client'")).toBe(true);
-  });
+const createGraph = (edges: Record<string, string[]>, entries: string[]) => {
+  const ids = new Set([...Object.keys(edges), ...Object.values(edges).flat(), ...entries]);
+  return {
+    getModuleInfo: (id: string) =>
+      ids.has(id)
+        ? {
+            id,
+            isEntry: entries.includes(id),
+            importers: Object.entries(edges)
+              .filter(([, imports]) => imports.includes(id))
+              .map(([importer]) => importer),
+            dynamicImporters: [],
+          }
+        : null,
+  };
+};
 
-  test("navigating / pendingPartials だけの import は対象外", () => {
-    // これを client-only 扱いにすると、スピナーを出すだけの Island までビルドが落ちる
-    expect(importsClientStore("import { navigating } from 'zogan/client'")).toBe(false);
-    expect(importsClientStore("import { pendingPartials, navigate } from 'zogan/client'")).toBe(
-      false,
-    );
-  });
-
-  test("別のモジュールからの clientStore は対象外", () => {
-    expect(importsClientStore("import { clientStore } from './my-utils'")).toBe(false);
-  });
-
-  test.each([
-    ["namespace", "import * as zogan from 'zogan/client'\nzogan.clientStore('cart', {})"],
-    ["dynamic", "const client = await import('zogan/client')\nclient.clientStore('cart', {})"],
-    ["named re-export", "export { clientStore } from 'zogan/client'"],
-    ["star re-export", "export * from 'zogan/client'"],
-  ])("%s 経路を client-only として検出する", (_label, source) => {
-    expect(importsClientStore(source)).toBe(true);
-  });
-
-  test("コメントや文字列中の偽 import は検出しない", () => {
-    expect(importsClientStore("// import { clientStore } from 'zogan/client'")).toBe(false);
-    expect(importsClientStore("const example = `import('zogan/client')`")).toBe(false);
-  });
-
-  test("type-only import は実行時到達として扱わない", () => {
-    expect(importsClientStore("import type { clientStore } from 'zogan/client'")).toBe(false);
-  });
-
-  test("構文エラーは解析失敗として安全に無視する", () => {
-    expect(importsClientStore("import { from")).toBe(false);
-  });
-
-  test("存在しない default import は安全側で client-only とする", () => {
-    expect(importsClientStore("import client from 'zogan/client'")).toBe(true);
-  });
-
-  test("side-effect import だけなら Store 到達とは扱わない", () => {
-    expect(importsClientStore("import 'zogan/client'")).toBe(false);
-  });
-
-  test("'use client-only' ディレクティブも補助判定になる", () => {
+describe("client-only の明示判定", () => {
+  test("'use client-only' directive を検出する", () => {
     expect(hasClientOnlyDirective("'use client-only'\nexport const x = 1")).toBe(true);
-    expect(hasClientOnlyDirective('"use client-only"\n')).toBe(true);
+    expect(hasClientOnlyDirective('"use client-only";\n')).toBe(true);
     expect(hasClientOnlyDirective("export const x = 1")).toBe(false);
   });
 
-  test("ディレクトリ規約（glob）も補助判定になる", () => {
-    expect(matchesGlob("/app/src/stores/cart.ts", "**/stores/**")).toBe(true);
-    expect(matchesGlob("/app/src/islands/CartBadge.tsx", "**/stores/**")).toBe(false);
+  test("leading trivia と先行 directive の後でも検出する", () => {
+    expect(hasClientOnlyDirective("/* license */\n'use client-only';\nexport {}")).toBe(true);
+    expect(hasClientOnlyDirective('// generated\n"use client-only"\nexport {}')).toBe(true);
+    expect(hasClientOnlyDirective("\uFEFF#!/usr/bin/env node\n'use client-only';")).toBe(true);
+    expect(hasClientOnlyDirective("'use strict';\n/* boundary */\n'use client-only';")).toBe(true);
+  });
+
+  test("directive scanner のcommentとstring境界をfail closedで扱う", () => {
+    expect(hasClientOnlyDirective("/* license\n * second line */'use client-only';")).toBe(true);
+    expect(hasClientOnlyDirective("/* unterminated")).toBe(false);
+    expect(hasClientOnlyDirective("'ordinary\\ value';\n'use client-only';")).toBe(true);
+    expect(hasClientOnlyDirective("'ordinary\\\r\nvalue';\n'use client-only';")).toBe(true);
+    expect(hasClientOnlyDirective("'use strict'\n'use client-only';")).toBe(true);
+    expect(hasClientOnlyDirective("'unterminated\n'use client-only';")).toBe(false);
+    expect(hasClientOnlyDirective("'unterminated")).toBe(false);
+    expect(hasClientOnlyDirective("'use strict';")).toBe(false);
+  });
+
+  test("comment、nested scope、通常の string expression は directive と誤認しない", () => {
+    expect(hasClientOnlyDirective("/* 'use client-only' */\nexport {}")).toBe(false);
+    expect(hasClientOnlyDirective("export function run() { 'use client-only'; }")).toBe(false);
+    expect(hasClientOnlyDirective("const marker = 'use client-only'")).toBe(false);
+    expect(hasClientOnlyDirective("'not a directive' + 'use client-only'")).toBe(false);
+  });
+
+  test("明示 glob に一致する path を検出する", () => {
+    expect(matchesGlob("/app/src/browser/cart.ts", "**/browser/**")).toBe(true);
+    expect(matchesGlob("/app/src/islands/CartBadge.tsx", "**/browser/**")).toBe(false);
   });
 });
 
-describe("§5.3.2 到達検出", () => {
-  const graph = (edges: Record<string, string[]>, entries: string[]) => {
-    const ids = new Set([...Object.keys(edges), ...Object.values(edges).flat(), ...entries]);
-    return {
-      getModuleInfo: (id: string) =>
-        ids.has(id)
-          ? {
-              id,
-              isEntry: entries.includes(id),
-              importers: Object.entries(edges)
-                .filter(([, imports]) => imports.includes(id))
-                .map(([importer]) => importer),
-              dynamicImporters: [],
-            }
-          : null,
-    };
-  };
-
-  test("サーババンドルから client-only に到達したら経路を返す", () => {
-    const g = graph(
+describe("client-only の SSR 到達検出", () => {
+  test("server entry から到達した経路を返す", () => {
+    const moduleGraph = createGraph(
       {
         "src/server/entry.ts": ["src/routes/products.tsx"],
         "src/routes/products.tsx": ["src/islands/CartBadge.tsx"],
-        "src/islands/CartBadge.tsx": ["src/stores/cart.ts"],
+        "src/islands/CartBadge.tsx": ["src/browser/cart.ts"],
       },
       ["src/server/entry.ts"],
     );
-    expect(findServerReachPath(g, "src/stores/cart.ts")).toEqual([
+    expect(findServerReachPath(moduleGraph, "src/browser/cart.ts")).toEqual([
       "src/server/entry.ts",
       "src/routes/products.tsx",
       "src/islands/CartBadge.tsx",
-      "src/stores/cart.ts",
+      "src/browser/cart.ts",
     ]);
   });
 
-  test("エントリから到達しないなら null", () => {
-    const g = graph({ "src/islands/CartBadge.tsx": ["src/stores/cart.ts"] }, [
+  test("entry から到達しないなら null", () => {
+    const moduleGraph = createGraph({ "src/islands/CartBadge.tsx": ["src/browser/cart.ts"] }, [
       "src/server/entry.ts",
     ]);
-    expect(findServerReachPath(g, "src/stores/cart.ts")).toBe(null);
+    expect(findServerReachPath(moduleGraph, "src/browser/cart.ts")).toBe(null);
   });
 
-  test("循環があっても止まる", () => {
-    const g = graph({ a: ["b"], b: ["a", "store"] }, ["entry"]);
-    expect(findServerReachPath(g, "store")).toBe(null);
+  test("循環があっても停止する", () => {
+    const moduleGraph = createGraph({ a: ["b"], b: ["a", "browser"] }, ["entry"]);
+    expect(findServerReachPath(moduleGraph, "browser")).toBe(null);
   });
 
-  test("dynamic importer もサーバー到達経路として辿る", () => {
-    const g = {
+  test("dynamic importer も server 到達経路として辿る", () => {
+    const moduleGraph = {
       getModuleInfo: (id: string) => {
-        if (id === "store")
+        if (id === "browser") {
           return { id, isEntry: false, importers: [], dynamicImporters: ["entry"] };
-        if (id === "entry") return { id, isEntry: true, importers: [], dynamicImporters: [] };
+        }
+        if (id === "entry") {
+          return { id, isEntry: true, importers: [], dynamicImporters: [] };
+        }
         return null;
       },
     };
-    expect(findServerReachPath(g, "store")).toEqual(["entry", "store"]);
+    expect(findServerReachPath(moduleGraph, "browser")).toEqual(["entry", "browser"]);
   });
 
   test("graph に存在しない target は null", () => {
     expect(findServerReachPath({ getModuleInfo: () => null }, "missing")).toBe(null);
   });
 
-  test("dynamicImporters が省略された ModuleInfo も辿れる", () => {
-    const info = {
-      store: { id: "store", isEntry: false, importers: ["entry"] },
+  test("dynamicImporters を省略した ModuleInfo も辿れる", () => {
+    const info: Record<string, { id: string; isEntry: boolean; importers: string[] }> = {
+      browser: { id: "browser", isEntry: false, importers: ["entry"] },
       entry: { id: "entry", isEntry: true, importers: [] },
     };
-    expect(
-      findServerReachPath(
-        { getModuleInfo: (id) => info[id as keyof typeof info] ?? null },
-        "store",
-      ),
-    ).toEqual(["entry", "store"]);
+    expect(findServerReachPath({ getModuleInfo: (id) => info[id] ?? null }, "browser")).toEqual([
+      "entry",
+      "browser",
+    ]);
   });
 
-  test("target 自身が entry の場合も表示できる", () => {
-    const path = ["store"];
-    expect(formatReachError(path)).toContain("store");
-  });
-
-  test("エラーメッセージに到達パスを全部出す", () => {
+  test("診断は到達経路をすべて表示する", () => {
     const message = formatReachError([
       "src/server/entry.ts",
       "src/routes/products.tsx",
       "src/islands/CartBadge.tsx",
-      "src/stores/cart.ts",
+      "src/browser/cart.ts",
     ]);
     expect(message).toContain("client-only module reached from server bundle");
     expect(message).toContain("src/server/entry.ts");
     expect(message).toContain("src/islands/CartBadge.tsx");
-    expect(message).toContain("src/stores/cart.ts");
-    expect(message).toContain("§5.3.2");
+    expect(message).toContain("src/browser/cart.ts");
+  });
+
+  test("単一要素の診断も安全に整形する", () => {
+    const message = formatReachError(["src/browser/cart.ts"]);
+    expect(message).toContain("src/browser/cart.ts");
+    expect(message).not.toContain("← client-only");
   });
 });

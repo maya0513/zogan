@@ -1,27 +1,39 @@
-import { mergeSnapshots } from "zogan/client";
-import { pendingAdds } from "../stores/cart";
+import type { TargetedSubmitEvent } from "preact";
+import { useState } from "preact/hooks";
+import type { JsonObject } from "zogan";
+import { refreshFragment } from "zogan/client";
 
-interface Props {
-  productId: number;
-  label?: string;
-}
+export type AddToCartProps = JsonObject & {
+  readonly disabled: boolean;
+  readonly label: string;
+  readonly productId: number;
+};
 
-export default function AddToCart({ productId, label = "Add to cart" }: Props) {
-  const submit = async (event: SubmitEvent) => {
-    event.preventDefault();
-    const form = event.currentTarget as HTMLFormElement;
-    const body = new URLSearchParams();
-    for (const [name, value] of new FormData(form, event.submitter).entries()) {
-      if (typeof value === "string") body.append(name, value);
-    }
-    pendingAdds.value += 1;
+const CART_BADGE_FRAGMENT = "/fragments/cart-badge";
+const activeSubmissions = new WeakSet<HTMLFormElement>();
+
+export default function AddToCart({
+  disabled,
+  label,
+  productId,
+}: AddToCartProps): preact.JSX.Element {
+  const [failed, setFailed] = useState(false);
+  const [pending, setPending] = useState(false);
+
+  const submitRequest = async (
+    form: HTMLFormElement,
+    submitter: SubmitEvent["submitter"],
+  ): Promise<void> => {
+    const data = new FormData(form, submitter);
+    const quantity = Number(data.get("quantity"));
+    setPending(true);
+
     try {
-      const response = await fetch(form.action, {
-        method: "POST",
-        body,
+      const response = await fetch("/api/cart/items", {
+        body: JSON.stringify({ productId, quantity }),
         credentials: "same-origin",
-        redirect: "manual",
-        headers: { Accept: "application/json", "X-Zogan-Request": "fragment" },
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        method: "POST",
       });
       if (
         !response.ok ||
@@ -29,19 +41,34 @@ export default function AddToCart({ productId, label = "Add to cart" }: Props) {
       ) {
         throw new Error(`unexpected response ${response.status}`);
       }
-      mergeSnapshots({ cart: await response.json() });
+      await response.json();
+      await refreshFragment(CART_BADGE_FRAGMENT);
     } catch {
-      HTMLFormElement.prototype.submit.call(form);
+      // Once a POST has been dispatched, a network failure cannot prove that the
+      // server did not commit it. Never replay the mutation automatically.
+      setFailed(true);
     } finally {
-      pendingAdds.value -= 1;
+      activeSubmissions.delete(form);
+      setPending(false);
     }
+  };
+
+  const submit = (event: TargetedSubmitEvent<HTMLFormElement>): void => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (activeSubmissions.has(form)) return;
+    activeSubmissions.add(form);
+    void submitRequest(form, event.submitter);
   };
 
   return (
     <form action="/cart/add" method="post" onSubmit={submit}>
       <input type="hidden" name="productId" value={productId} />
       <input type="hidden" name="quantity" value="1" />
-      <button type="submit">{pendingAdds.value > 0 ? "Adding…" : label}</button>
+      <button type="submit" disabled={disabled || failed || pending}>
+        {pending ? "Adding…" : label}
+      </button>
+      {failed && <p role="alert">Could not confirm the update. Reload before trying again.</p>}
     </form>
   );
 }

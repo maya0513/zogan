@@ -17,7 +17,6 @@
     "noUncheckedIndexedAccess": true
   },
   "imports": {
-    "@preact/signals": "npm:@preact/signals@^2.11.0",
     "hono": "npm:hono@^4.13.0",
     "preact": "npm:preact@^10.29.8",
     "preact/": "npm:preact@^10.29.8/",
@@ -33,7 +32,7 @@
     "deno:example:build": "deno task --config examples/deno/deno.json build",
     "deno:example:dev": "deno task --config examples/deno/deno.json dev",
     "deno:example:start": "deno task --config examples/deno/deno.json start",
-    "deno:jsr": "deno doc --lint src/server/index.ts src/client/index.ts src/vite/index.ts 2>&1 | node scripts/check-deno-doc.mjs && deno publish --dry-run --allow-dirty --allow-slow-types"
+    "deno:jsr": "deno doc --lint src/server/index.ts src/client/index.ts src/vite/index.ts 2>&1 | node scripts/check-deno-doc.mjs && deno publish --dry-run --allow-dirty"
   },
   "publish": {
     "include": ["LICENSE", "README.md", "README.ja.md", "src/**/*.ts"]

@@ -1,74 +1,212 @@
-/**
- * <Island>（§6.1）。
- *
- * このコンポーネントは Island の実体を import しない。受け取るのは name（文字列）と
- * children だけで、名前からコンポーネントへの解決はクライアントの start({ islands }) が行う。
- * この非対称性が §5.3 の不変条件（Store はクライアント専用）を成立させている。
- */
-import { h, type ComponentChildren, type VNode } from "preact";
-import { isValidComponentName } from "./markers.ts";
-import { currentRenderContext, type RenderContext } from "./render.ts";
+import { h, type ComponentType, type VNode } from "preact";
+import { ISLAND_ID_PATTERN, isIslandId } from "../shared/island-id.ts";
 
-/** Conditions supported for hydrating an Island. */
-export type IslandTrigger = "load" | "idle" | "visible" | "none" | `media:${string}`;
+/** A recursively serializable, finite JSON value. */
+export type JsonValue = null | boolean | number | string | readonly JsonValue[] | JsonObject;
 
-/** Props accepted by {@link Island}. */
-export interface IslandProps {
-  /** 登録済みコンポーネント名。^[A-Za-z][A-Za-z0-9_]*$ */
-  name: string;
-  /** JSON 直列化可能な値のみ。秘密や巨大データを入れない（§6.1.1） */
-  props?: Record<string, unknown>;
-  /** 既定 'load' */
-  trigger?: IslandTrigger;
-  /**
-   * Fragment の取得先 URL（§6.1.5）。単一の URL のみ。
-   * 【不変条件・§4.3】値はサーバが SSR 時に書くもののみ。
-   */
-  fragment?: string;
-  /** Server-rendered fallback content. */
-  children?: ComponentChildren;
-}
-
-const TRIGGER = /^(load|idle|visible|none|media:.+)$/;
-
-/**
- * data-fragment は fragmentPrefix 配下の同一オリジンでなければならない（付録 B.1.1）。
- * クライアント側でも実行時に検証するが、書いた時点で気付けるほうが安い。
- */
-const assertFragmentUrl = (ctx: RenderContext, url: string): void => {
-  const isRelative = url.startsWith("/");
-  const ok = isRelative && url.startsWith(ctx.fragmentPrefix);
-  if (ok) return;
-  const message = isRelative
-    ? `zogan: fragment URL ${JSON.stringify(url)} must start with ${JSON.stringify(ctx.fragmentPrefix)} (§4.3.3)`
-    : `zogan: fragment URL ${JSON.stringify(url)} must be a same-origin path under ${JSON.stringify(ctx.fragmentPrefix)} (§4.3.3)`;
-  throw new Error(message);
+/** A plain JSON object accepted as an Island props root. */
+export type JsonObject = {
+  readonly [key: string]: JsonValue;
 };
 
-/** Declares a server-rendered region that may hydrate on the client. */
-// oxlint-disable-next-line no-explicit-any
-export function Island(props: IslandProps): VNode<any> {
-  const ctx = currentRenderContext();
-  const { name, trigger = "load", fragment } = props;
+/** Client activation behavior for a server-rendered Island boundary. */
+export type IslandMode = "hydrate" | "mount";
+/** Browser trigger supported by Island activation. */
+export type IslandTrigger = "load" | "idle" | "visible" | `media:${string}`;
 
-  if (!isValidComponentName(name)) {
-    throw new Error(
-      `zogan: invalid island name ${JSON.stringify(name)}. must match ^[A-Za-z][A-Za-z0-9_]*$ (§6.1.1)`,
-    );
+/** Internal type-only props carrier for an Island descriptor. */
+const descriptorProps: unique symbol = Symbol("zogan.IslandDescriptor.props");
+/** Internal component slot shared by descriptor construction and SSR. */
+const descriptorComponent: unique symbol = Symbol("zogan.IslandDescriptor.component");
+
+/** A server-side island declaration carrying its exact props type. */
+export interface IslandDescriptor<Props extends JsonObject = JsonObject> {
+  /** Stable public ID matched to the Vite Island filename. */
+  readonly id: string;
+  /** Whether the client hydrates SSR markup or mounts over a fallback. */
+  readonly mode: IslandMode;
+  /** Internal SSR component retained by the descriptor. */
+  readonly [descriptorComponent]: ComponentType<Props>;
+  /** Type-only invariant props carrier. */
+  readonly [descriptorProps]?: Props;
+}
+
+/** Extract the Preact component type required by a descriptor. */
+export type IslandComponentFor<Descriptor> =
+  Descriptor extends IslandDescriptor<infer Props> ? ComponentType<Props> : never;
+
+const assertIslandId = (id: string): void => {
+  if (!isIslandId(id)) {
+    throw new TypeError(`zogan: island id ${JSON.stringify(id)} must match ${ISLAND_ID_PATTERN}`);
   }
-  if (!TRIGGER.test(trigger)) {
-    throw new Error(
-      `zogan: invalid trigger ${JSON.stringify(trigger)} on island ${JSON.stringify(name)} (§6.1.2)`,
-    );
+};
+
+const makeDescriptor = <Props extends JsonObject>(
+  id: string,
+  mode: IslandMode,
+  component: ComponentType<Props>,
+): IslandDescriptor<Props> => {
+  assertIslandId(id);
+  if (typeof component !== "function") {
+    throw new TypeError(`zogan: island ${JSON.stringify(id)} component must be a Preact component`);
   }
-  if (fragment !== undefined) assertFragmentUrl(ctx, fragment);
+  return Object.freeze({
+    [descriptorComponent]: component,
+    id,
+    mode,
+  });
+};
 
-  // 属性の順序は出力の安定のために固定する
-  const attrs: Record<string, unknown> = { "data-island": name };
-  // data-props は HTML 属性値。エスケープは Preact に任せる（付録 B.1.2）
-  if (props.props !== undefined) attrs["data-props"] = JSON.stringify(props.props);
-  attrs["data-trigger"] = trigger;
-  if (fragment !== undefined) attrs["data-fragment"] = fragment;
+/** Options for an SSR-safe component hydrated in place. */
+export interface DefineIslandOptions<Props extends JsonObject> {
+  /** Stable ID, equal to the client module filename stem. */
+  readonly id: string;
+  /** Component used for both SSR and hydration. */
+  readonly component: ComponentType<Props>;
+}
 
-  return h("div", attrs, props.children);
+/** Options for a client-only component with an explicit SSR fallback. */
+export interface DefineClientIslandOptions<Props extends JsonObject> {
+  /** Stable ID, equal to the client module filename stem. */
+  readonly id: string;
+  /** Server-safe fallback replaced when the client module mounts. */
+  readonly fallback: ComponentType<Props>;
+}
+
+/** Declare an island whose server markup will be hydrated in place. */
+export const defineIsland = <Props extends JsonObject>(
+  options: DefineIslandOptions<Props>,
+): IslandDescriptor<Props> => makeDescriptor(options.id, "hydrate", options.component);
+
+/** Declare a client-only island whose server fallback will be replaced on mount. */
+export const defineClientIsland = <Props extends JsonObject>(
+  options: DefineClientIslandOptions<Props>,
+): IslandDescriptor<Props> => makeDescriptor(options.id, "mount", options.fallback);
+
+const isPlainObject = (value: object): boolean => {
+  const prototype: unknown = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+};
+
+const assertJson = (value: unknown, path: string, stack: Set<object>): void => {
+  if (value === null || typeof value === "string" || typeof value === "boolean") return;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new TypeError(`zogan: island props ${path} must be a finite JSON number`);
+    }
+    return;
+  }
+  if (typeof value !== "object") {
+    throw new TypeError(`zogan: island props ${path} contains a non-JSON ${typeof value} value`);
+  }
+  if (stack.has(value)) {
+    throw new TypeError(`zogan: island props ${path} contains a cyclic JSON value`);
+  }
+
+  stack.add(value);
+  try {
+    if (Array.isArray(value)) {
+      if (Reflect.ownKeys(value).some((key) => typeof key === "symbol")) {
+        throw new TypeError(`zogan: island props ${path} contains a symbol key`);
+      }
+      for (let index = 0; index < value.length; index += 1) {
+        const property = Object.getOwnPropertyDescriptor(value, index);
+        if (property === undefined) {
+          throw new TypeError(`zogan: island props ${path}[${index}] is not a JSON value`);
+        }
+        if (
+          property.enumerable !== true ||
+          property.get !== undefined ||
+          property.set !== undefined
+        ) {
+          throw new TypeError(
+            `zogan: island props ${path}[${index}] must be a plain enumerable JSON property`,
+          );
+        }
+        const item: unknown = property.value;
+        assertJson(item, `${path}[${index}]`, stack);
+      }
+      const extraKeys = Object.getOwnPropertyNames(value).filter(
+        (key) =>
+          key !== "length" && (!/^(0|[1-9][0-9]*)$/.test(key) || Number(key) >= value.length),
+      );
+      if (extraKeys.length > 0) {
+        throw new TypeError(`zogan: island props ${path} contains a non-JSON array property`);
+      }
+      return;
+    }
+
+    if (!isPlainObject(value)) {
+      throw new TypeError(`zogan: island props ${path} must contain only plain JSON objects`);
+    }
+    if (Object.getOwnPropertySymbols(value).length > 0) {
+      throw new TypeError(`zogan: island props ${path} contains a symbol key`);
+    }
+    for (const key of Object.getOwnPropertyNames(value)) {
+      const property = Object.getOwnPropertyDescriptor(value, key);
+      if (
+        property?.enumerable !== true ||
+        property.get !== undefined ||
+        property.set !== undefined
+      ) {
+        throw new TypeError(
+          `zogan: island props ${path}.${key} must be a plain enumerable JSON property`,
+        );
+      }
+      const propertyValue: unknown = property.value;
+      assertJson(propertyValue, `${path}.${key}`, stack);
+    }
+  } finally {
+    stack.delete(value);
+  }
+};
+
+const serializeProps = (props: unknown): string => {
+  if (
+    props === null ||
+    typeof props !== "object" ||
+    Array.isArray(props) ||
+    !isPlainObject(props)
+  ) {
+    throw new TypeError("zogan: island props must be a plain JSON object");
+  }
+  assertJson(props, "$", new Set());
+  return JSON.stringify(props);
+};
+
+const assertTrigger = (trigger: string): void => {
+  const valid =
+    trigger === "load" ||
+    trigger === "idle" ||
+    trigger === "visible" ||
+    (trigger.startsWith("media:") && trigger.slice("media:".length).trim() !== "");
+  if (!valid) throw new TypeError(`zogan: invalid island trigger ${JSON.stringify(trigger)}`);
+};
+
+/** Props accepted by the server-rendered Island boundary component. */
+export interface IslandProps<Props extends JsonObject> {
+  /** Typed Island descriptor. */
+  readonly of: IslandDescriptor<Props>;
+  /** Strict JSON props serialized into the local marker. */
+  readonly props: Props;
+  /** Optional activation trigger. Defaults to load. */
+  readonly trigger?: IslandTrigger;
+}
+
+/** Render the server-owned half of an island with a fixed, explicit marker. */
+// oxlint-disable-next-line no-explicit-any -- Preact's VNode parameter is invariant.
+export function Island<Props extends JsonObject>(props: IslandProps<Props>): VNode<any> {
+  const trigger = props.trigger ?? "load";
+  assertTrigger(trigger);
+  const serialized = serializeProps(props.props);
+  return h(
+    "div",
+    {
+      "data-zogan-island": props.of.id,
+      "data-zogan-mode": props.of.mode,
+      "data-zogan-trigger": trigger,
+      "data-zogan-props": serialized,
+    },
+    h(props.of[descriptorComponent], props.props),
+  );
 }

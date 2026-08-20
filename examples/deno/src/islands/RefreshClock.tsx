@@ -1,8 +1,11 @@
-import { refreshFragment } from "zogan/client";
+"use client-only";
 
-export default function RefreshClock(): preact.JSX.Element {
+import { refreshFragment } from "zogan/client";
+import type { RefreshClockProps } from "../island-props.ts";
+
+export default function RefreshClock({ src }: RefreshClockProps): preact.JSX.Element {
   return (
-    <button type="button" onClick={() => void refreshFragment("/_f/clock")}>
+    <button type="button" onClick={() => void refreshFragment(src)}>
       Refresh server time
     </button>
   );

@@ -1,36 +1,78 @@
-import { Hono } from "hono";
-import { describe, expectTypeOf, test } from "vitest";
-import type { NavigateOptions } from "../../src/client/index";
-import { zogan, type FragmentHandler, type PageHandler } from "../../src/server/index";
+import { Hono, type Context } from "hono";
+import { h, type ComponentType } from "preact";
+import { describe, expect, expectTypeOf, test } from "vitest";
+import * as server from "../../src/server/index";
+import {
+  createZogan,
+  defineClientIsland,
+  defineIsland,
+  type CachePolicy,
+  type IslandComponentFor,
+  type IslandDescriptor,
+  type IslandProps,
+  type JsonObject,
+  type ZoganRenderOptions,
+} from "../../src/server/index";
 
-type ShopEnv = {
-  Bindings: { DB: { readonly kind: "d1" } };
-  Variables: { requestId: string };
+type CounterProps = JsonObject & { count: number };
+type HasRequiredProps =
+  Record<never, never> extends Pick<IslandProps<JsonObject>, "props"> ? false : true;
+
+const Counter: ComponentType<CounterProps> = ({ count }) => h("span", null, count);
+
+const legacyPartials = (context: Context): unknown => {
+  // @ts-expect-error -- request-scoped Partial state is not part of Hono
+  return context.req.partials;
 };
 
 describe("公開サーバー契約", () => {
-  test("クライアントの公開オプションに履歴の内部状態を出さない", () => {
-    const options: NavigateOptions = {};
-    // @ts-expect-error history の所有者はクライアントランタイム
-    options.history = "none";
-    expectTypeOf(options).toMatchTypeOf<NavigateOptions>();
+  test("狭い明示 API だけを value export する", () => {
+    // oxlint-disable-next-line unicorn/no-array-sort -- Object.keys() is already a fresh array
+    expect(Object.keys(server).sort()).toEqual([
+      "FragmentSlot",
+      "Island",
+      "cachePolicy",
+      "createZogan",
+      "defineClientIsland",
+      "defineIsland",
+      "privateNoStore",
+      "publicCache",
+    ]);
   });
 
-  test("Hono の Env を page/fragment handler まで維持する", () => {
-    const app = new Hono<ShopEnv>();
-    expectTypeOf(zogan(app, { fragmentPrefix: "/fragments" })).toEqualTypeOf(app);
+  test("Hono prototype を変更しない", () => {
+    const app = new Hono();
+    expect(Hono.prototype).not.toHaveProperty("page");
+    expect(Hono.prototype).not.toHaveProperty("fragment");
+    // @ts-expect-error -- legacy ambient augmentation must never return
+    expect(app.page).toBeUndefined();
+    // @ts-expect-error -- legacy ambient augmentation must never return
+    expect(app.fragment).toBeUndefined();
 
-    app.page("/", (c) => {
-      expectTypeOf(c.env.DB).toEqualTypeOf<{ readonly kind: "d1" }>();
-      expectTypeOf(c.get("requestId")).toEqualTypeOf<string>();
-      return c.text("ok");
-    });
-    app.fragment("badge", (c) => {
-      expectTypeOf(c.env.DB).toEqualTypeOf<{ readonly kind: "d1" }>();
-      return c.text("ok");
+    expectTypeOf(legacyPartials).returns.toEqualTypeOf<unknown>();
+  });
+
+  test("createZogan は Context と必須 CachePolicy を取る明示的な factory", () => {
+    type Zogan = ReturnType<typeof createZogan>;
+
+    expectTypeOf<Parameters<Zogan["page"]>[0]>().toEqualTypeOf<Context>();
+    expectTypeOf<Parameters<Zogan["fragment"]>[0]>().toEqualTypeOf<Context>();
+    expectTypeOf<Parameters<Zogan["page"]>[2]>().toEqualTypeOf<ZoganRenderOptions>();
+    expectTypeOf<Parameters<Zogan["fragment"]>[2]["cache"]>().toEqualTypeOf<CachePolicy>();
+  });
+
+  test("descriptor から component props 型を保つ", () => {
+    const descriptor = defineIsland<CounterProps>({ component: Counter, id: "Counter" });
+    const clientDescriptor = defineClientIsland<CounterProps>({
+      fallback: ({ count }) => h("span", null, count),
+      id: "ClientCounter",
     });
 
-    expectTypeOf<PageHandler<ShopEnv>>().toBeFunction();
-    expectTypeOf<FragmentHandler<ShopEnv>>().toBeFunction();
+    expectTypeOf(descriptor).toEqualTypeOf<IslandDescriptor<CounterProps>>();
+    expectTypeOf<IslandComponentFor<typeof descriptor>>().toEqualTypeOf<
+      ComponentType<CounterProps>
+    >();
+    expectTypeOf(clientDescriptor).toEqualTypeOf<IslandDescriptor<CounterProps>>();
+    expectTypeOf<HasRequiredProps>().toEqualTypeOf<true>();
   });
 });

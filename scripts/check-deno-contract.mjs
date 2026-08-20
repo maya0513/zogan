@@ -35,7 +35,6 @@ if (JSON.stringify(deno.exports) !== JSON.stringify(expectedExports)) {
 const expectedImports = {
   hono: "npm:hono@^4.13.0",
   preact: "npm:preact@^10.29.8",
-  "@preact/signals": "npm:@preact/signals@^2.11.0",
   "preact-render-to-string": "npm:preact-render-to-string@^6.7.0",
   vite: "npm:vite@^8.2.1",
 };

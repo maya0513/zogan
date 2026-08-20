@@ -1,58 +1,100 @@
 /**
- * client-only モジュールの判定と到達検出（§5.3.2）。
- *
- * 判定は「zogan/client から clientStore を named import しているモジュール」を主とする。
- * clientStore は zogan/client からしか export されないので、Store モジュールは必ず
- * この import を持つ。規約ではなく型の帰結なので抜けようがない。
- *
- * zogan/client の import 全般を対象にしてはならない。navigating / pendingPartials は
- * Island が正当に読むもので、SSR 中は常に false / [] になる（§7.3.2）。
+ * 明示された client-only モジュールの判定と SSR entry からの到達検出。
+ * 判定方法は 'use client-only' directive と、plugin option の glob だけに限定する。
  */
 
-import { ImportType, initSync, parse } from "es-module-lexer";
+const WHITESPACE = /\s/;
+const isLineTerminator = (character: string): boolean => {
+  const codePoint = character.codePointAt(0);
+  return character === "\n" || character === "\r" || codePoint === 0x2028 || codePoint === 0x2029;
+};
 
-initSync();
-
-export const importsClientStore = (code: string): boolean => {
-  let imports: ReturnType<typeof parse>[0];
-  try {
-    [imports] = parse(code);
-  } catch {
-    return false;
-  }
-  for (const imported of imports) {
-    if (imported.n !== "zogan/client") continue;
-    if (imported.t === ImportType.Dynamic || imported.t === ImportType.DynamicSourcePhase) {
-      return true;
-    }
-
-    const statement = code.slice(imported.ss, imported.se).trim();
-    if (/^(?:import|export)\s+type\b/.test(statement)) continue;
-    if (/^(?:import|export)\s+(?:defer\s+)?\*/.test(statement)) return true;
-
-    const named = /\{([\s\S]*?)\}/.exec(statement)?.[1];
-    if (named !== undefined) {
-      const specifiers = named.split(",").map((specifier) => specifier.trim());
-      if (
-        specifiers.some(
-          (specifier) =>
-            !specifier.startsWith("type ") &&
-            (specifier === "clientStore" || /^clientStore\s+as\s+/.test(specifier)),
-        )
-      ) {
-        return true;
-      }
-      continue;
-    }
-
-    // zogan/client has no default export. Treat an attempted default import as unsafe.
-    if (/^import\s+[A-Za-z_$]/.test(statement)) return true;
+const containsLineTerminator = (value: string): boolean => {
+  for (const valueCharacter of value) {
+    if (isLineTerminator(valueCharacter)) return true;
   }
   return false;
 };
 
-export const hasClientOnlyDirective = (code: string): boolean =>
-  /^\s*(['"])use client-only\1/.test(code);
+interface TriviaResult {
+  readonly end: number;
+  readonly sawLineTerminator: boolean;
+}
+
+const skipTrivia = (code: string, start: number): TriviaResult => {
+  let end = start;
+  let sawLineTerminator = false;
+  while (end < code.length) {
+    const character = code[end];
+    if (character !== undefined && WHITESPACE.test(character)) {
+      if (isLineTerminator(character)) sawLineTerminator = true;
+      end += 1;
+      continue;
+    }
+    if (code.startsWith("//", end)) {
+      end += 2;
+      while (end < code.length && !isLineTerminator(code.slice(end, end + 1))) end += 1;
+      continue;
+    }
+    if (code.startsWith("/*", end)) {
+      const close = code.indexOf("*/", end + 2);
+      if (close === -1) return { end: code.length, sawLineTerminator };
+      if (containsLineTerminator(code.slice(end, close + 2))) {
+        sawLineTerminator = true;
+      }
+      end = close + 2;
+      continue;
+    }
+    break;
+  }
+  return { end, sawLineTerminator };
+};
+
+interface StringLiteralResult {
+  readonly content: string;
+  readonly end: number;
+}
+
+const readStringLiteral = (code: string, start: number): StringLiteralResult | null => {
+  const quote = code[start];
+  if (quote !== "'" && quote !== '"') return null;
+
+  let end = start + 1;
+  while (end < code.length) {
+    const character = code[end];
+    if (character === quote) {
+      return { content: code.slice(start + 1, end), end: end + 1 };
+    }
+    if (character === "\\") {
+      end += code[end + 1] === "\r" && code[end + 2] === "\n" ? 3 : 2;
+      continue;
+    }
+    if (character === undefined || isLineTerminator(character)) return null;
+    end += 1;
+  }
+  return null;
+};
+
+export const hasClientOnlyDirective = (code: string): boolean => {
+  let cursor = code.codePointAt(0) === 0xfeff ? 1 : 0;
+  if (code.startsWith("#!", cursor)) {
+    while (cursor < code.length && !isLineTerminator(code.slice(cursor, cursor + 1))) cursor += 1;
+  }
+
+  while (cursor < code.length) {
+    cursor = skipTrivia(code, cursor).end;
+    const literal = readStringLiteral(code, cursor);
+    if (literal === null) return false;
+
+    const trailing = skipTrivia(code, literal.end);
+    const hasTerminator =
+      trailing.end === code.length || code[trailing.end] === ";" || trailing.sawLineTerminator;
+    if (!hasTerminator) return false;
+    if (literal.content === "use client-only") return true;
+    cursor = code[trailing.end] === ";" ? trailing.end + 1 : trailing.end;
+  }
+  return false;
+};
 
 /** ** と * だけを解釈する最小の glob。依存を増やさないため自前で持つ */
 export const matchesGlob = (path: string, glob: string): boolean => {
@@ -85,11 +127,10 @@ export interface ModuleGraphLike {
  */
 export const findServerReachPath = (graph: ModuleGraphLike, target: string): string[] | null => {
   const seen = new Set<string>([target]);
-  const queue: string[][] = [[target]];
+  const queue: [string, ...string[]][] = [[target]];
 
-  while (queue.length > 0) {
-    const path = queue.shift()!;
-    const head = path[0]!;
+  for (const path of queue) {
+    const [head] = path;
     const info = graph.getModuleInfo(head);
     if (info === null) continue;
     if (info.isEntry) return path;
@@ -103,18 +144,19 @@ export const findServerReachPath = (graph: ModuleGraphLike, target: string): str
   return null;
 };
 
-/** 到達パスを全部出す。どこで import しているかが分からないと直せない（§5.3.2） */
+/** 到達パスを全部出す。どこで import しているかが分からないと境界違反を直せない。 */
 export const formatReachError = (path: readonly string[]): string => {
   const lines = path.map((id, index) => `${"  ".repeat(index + 1)}${index === 0 ? "" : "→ "}${id}`);
   const last = path.length - 1;
-  if (last > 0) lines[last] = `${lines[last]!}             ← client-only`;
+  const finalLine = lines[last];
+  if (last > 0 && finalLine !== undefined) {
+    lines[last] = `${finalLine}             ← client-only`;
+  }
   return [
     "zogan: client-only module reached from server bundle",
     "",
     ...lines,
     "",
-    "  Store を読むコンポーネントをサーバ経路に置かないでください（§5.3.2）。",
-    "    - <Island> の children  → プレースホルダに留める",
-    "    - app.fragment の応答   → props で受ける表示専用コンポーネントを使う",
+    "  client-only モジュールをサーバ entry から import しないでください。",
   ].join("\n");
 };

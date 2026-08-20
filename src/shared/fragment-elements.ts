@@ -1,0 +1,101 @@
+import type { JSX } from "preact";
+
+/**
+ * HTML elements whose child list can be replaced using Zogan's HTML fragment parser.
+ *
+ * This deliberately excludes document roots, void elements, raw-text elements,
+ * template/slot semantics, embedded content, and foreign SVG/MathML namespaces.
+ * Table and select containers are handled by explicit contextual parser wrappers.
+ */
+/** Internal runtime allowlist backing the public FragmentElement union. */
+const FRAGMENT_ELEMENTS = [
+  "a",
+  "abbr",
+  "address",
+  "article",
+  "aside",
+  "b",
+  "bdi",
+  "bdo",
+  "blockquote",
+  "button",
+  "caption",
+  "cite",
+  "code",
+  "colgroup",
+  "data",
+  "datalist",
+  "dd",
+  "del",
+  "details",
+  "dfn",
+  "dialog",
+  "div",
+  "dl",
+  "dt",
+  "em",
+  "fieldset",
+  "figcaption",
+  "figure",
+  "footer",
+  "form",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "hgroup",
+  "i",
+  "ins",
+  "kbd",
+  "label",
+  "legend",
+  "li",
+  "main",
+  "mark",
+  "menu",
+  "meter",
+  "nav",
+  "ol",
+  "optgroup",
+  "output",
+  "p",
+  "pre",
+  "progress",
+  "q",
+  "rp",
+  "rt",
+  "ruby",
+  "s",
+  "samp",
+  "search",
+  "section",
+  "select",
+  "small",
+  "span",
+  "strong",
+  "sub",
+  "summary",
+  "sup",
+  "table",
+  "tbody",
+  "td",
+  "tfoot",
+  "th",
+  "thead",
+  "time",
+  "tr",
+  "u",
+  "ul",
+  "var",
+] as const satisfies readonly (keyof JSX.IntrinsicElements)[];
+
+/** HTML containers whose children zogan can parse and replace safely. */
+export type FragmentElement = (typeof FRAGMENT_ELEMENTS)[number];
+
+const fragmentElements: ReadonlySet<string> = new Set(FRAGMENT_ELEMENTS);
+
+export const isFragmentElement = (value: unknown): value is FragmentElement =>
+  typeof value === "string" && fragmentElements.has(value);

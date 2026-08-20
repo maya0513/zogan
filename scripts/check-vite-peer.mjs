@@ -1,11 +1,10 @@
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, resolve } from "node:path";
 import { build, version } from "vite";
 import { zoganVite } from "../dist/vite/index.mjs";
 
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const repositoryRoot = resolve(import.meta.dirname, "..");
 const clientEntry = join(repositoryRoot, "dist/client/index.js");
 
 if (!existsSync(clientEntry)) {
@@ -32,7 +31,7 @@ try {
     build: {
       emptyOutDir: true,
       outDir: "dist/client",
-      rollupOptions: { input: join(sourceRoot, "client.js") },
+      rolldownOptions: { input: join(sourceRoot, "client.js") },
     },
   });
 

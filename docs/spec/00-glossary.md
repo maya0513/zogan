@@ -1,75 +1,45 @@
-# 名称と用語
+# §0 用語
 
-## 名称
-
-**zogan**（象嵌）。表記は常に小文字 ASCII の `zogan`。ドキュメント中でも漢字表記「象嵌」は使わず `zogan` に統一する（検索性のため）。
-
-由来：母材に穴を彫り、そこへ別の素材を嵌め込む工芸技法。[§4](04-fragment.md) の「外の殻を CDN キャッシュ可能にするために穴を開け、その穴だけ別のキャッシュ規則で埋める」と構造が一致する。`app.fragment()` が彫る側、Fragment ハンドラが嵌める側、と説明が一直線に通る。
-
-命名が構造と一致していることには実利があります。新しく参加した実装者に「なぜ Fragment はページと別のキャッシュヘッダを持つのか」を説明するとき、比喩から入って設計に降りられます。逆に言えば、**この比喩が成り立たなくなる変更は設計の破綻を示す信号**として使えます。たとえば「Fragment に props を渡したい」という要望は、嵌め込む側が母材の形を知らないと嵌まらない、という時点で無理があると分かります（[§4.3](04-fragment.md)）。
-
-## パッケージ構成
-
-| モジュール | 内容 |
-|---|---|
-| `zogan` | サーバ側。Hono への `app.page` / `app.fragment` 拡張、`<Partial>`、マーカー付き SSR |
-| `zogan/client` | クライアントランタイム（[§7](07-client-runtime.md)）。`navigating` / `pendingPartials` もここから export |
-| `zogan/vite` | ビルドプラグイン。[§5.3](05-store.md) の client-only 検証を含む |
-
-3 つに分けているのは、**サーババンドルとクライアントバンドルの境界を import 文で見えるようにする**ためです。`zogan/client` を `zogan` から import できてしまう構成にすると、[§5.3](05-store.md) の検証がすり抜けやすくなります。
-
-型シグネチャの一覧は [付録 A](appendix-a-api.md) を参照。
-
-## 接頭辞の方針
-
-Fragment のエンドポイント接頭辞は `/_f/` のままとし、`/_zogan/` にはしない。URL に製品名を出す必要がなく、短いほうがキャッシュキーとして読みやすい。
-
-DOM 属性も `data-*` のままとする（§0）。`data-zogan-*` のような接頭辞は付けない。
-
-> **補足：衝突リスクをどう見積もったか**
->
-> 接頭辞を付けない判断は、他ライブラリとの属性名衝突を許容するということです。実際に危険なのは `data-props` / `data-store` / `data-fragment` の 3 つ（一般的な名前）ですが、いずれも `data-island` / `[data-store]` セレクタと組で読まれるため、単独で誤爆する経路がありません。`data-client-nav` / `data-partial` / `data-preserve` は十分に特徴的です。
->
-> 衝突が実際に起きた場合の逃げ道として、`zogan/vite` に属性接頭辞のリネーム設定を後付けできる余地は残しておくこと（ビルド時の文字列置換で足りる）。ただし**既定値は変更しない**。
-
----
-
-## §0 用語
-
-既存の語彙に揃える。造語を作らない。
-
-| 語 | 意味 | 由来 |
-|---|---|---|
-| **Partial** | 差し替え単位の領域。JSX コンポーネント | Fresh の `<Partial>`、Rails の partial |
-| **Fragment** | キャッシュに穴を開ける独立エンドポイント。サーバ側の登録のみ | ESI の fragment、Rails の fragment caching |
-| **Island** | 部分ハイドレーションの単位 | 一般的な islands architecture |
-| **Store** | ページを跨いで生きる共有状態 | — |
-
-**Partial と Fragment は別物**。前者は「HTML のこの範囲を差し替える」、後者は「この部分だけ別のキャッシュ規則で取得する」。系譜が違うので同じ語を使わない。
-
-この区別が曖昧になると設計が崩れます。判断に迷ったら次の問いに答えてください。
-
-> **その領域の中身は、URL だけで決まるか？**
->
-> - **決まる** → Partial。ページと同じキャッシュキーに乗る
-> - **決まらない**（Cookie が要る、TTL が短い） → Fragment。穴を開ける
-
-`Fragment` を JSX コンポーネント名にしないこと。Preact が `Fragment` を export しており衝突する。Fragment はサーバ側の登録（`app.fragment(...)`）のみに使うので、この命名なら衝突しない。
-
-属性はすべて `data-*` 接頭辞で統一する（有効な HTML であること、Fresh の `f-` と混同されないこと）。
-
-### 補助語彙
-
-本編に頻出するが上表に載せていない語。定義を固定しておく。
+## 0.1 中核語彙
 
 | 語 | 意味 |
 |---|---|
-| **殻 (shell)** | ページのうち、全ユーザに同一で CDN キャッシュ可能な部分。Fragment を除いた残り |
-| **穴 (hole)** | Fragment が占める領域。殻の中でキャッシュ規則が異なる |
-| **マーカー** | Partial の範囲を示す HTML コメント `<!--p:name-->` / `<!--/p:name-->`（[§3.3](03-partial.md)） |
-| **snapshot** | Store の確定値を HTML に埋め込んだ JSON（[§5.2](05-store.md)） |
-| **base / pending** | Store の二層。サーバ確定値 / 未確定の楽観差分（[§5.1](05-store.md)） |
-| **delta** | `pending` に積む 1 件の楽観差分 |
-| **ソフトナビゲーション** | fetch + Partial 差し替えによる遷移。対義は**フルナビゲーション**（ブラウザの通常遷移） |
-| **フォールバック** | ソフトナビゲーションを中止してフルナビゲーションに切り替えること（[§7.3](07-client-runtime.md)） |
-| **trigger** | Island をハイドレートする契機（[§6.1](06-island.md)） |
+| **page** | layoutとdoctypeを含む完全なHTML document。`Zogan.page()` が生成する |
+| **Fragment** | 独立した同一origin URLから取得する、埋め込み用のHTML表現 |
+| **Fragment endpoint** | `Zogan.fragment()` でHTMLを返す通常のHono route。route登録はアプリの責務 |
+| **FragmentSlot** | Fragmentの取得URL、trigger、server fallbackを持つ置換コンテナ |
+| **remote include** | ブラウザが別URLのHTMLを取得し、既存documentの局所へ挿入すること |
+| **Island** | serverが描画した局所DOMを、lazyに読み込んだPreact componentでhydrateまたはmountする境界 |
+| **Island descriptor** | 安定ID、mode、props型、server componentまたはfallbackを結び付ける値 |
+| **hydrate mode** | server DOMを残したままPreact event処理を接続するmode |
+| **mount mode** | server fallbackを消し、client componentを新規renderするmode |
+| **trigger** | Fragmentの取得またはIslandの起動を開始する契機 |
+| **fallback** | JavaScript実行前から存在し、失敗時にも残す意味のあるserver HTML |
+| **shell** | 複数ユーザへ共有できるpage部分。ユーザ固有箇所は別URLのFragmentへ分離する |
+| **CachePolicy** | responseの `Cache-Control` と追加する `Vary` tokenを保持するopaque値 |
+| **Island loader** | `Promise<{ default: ComponentType }>` を返すID単位のdynamic import関数 |
+| **marker protocol** | serverとclientが共有する `data-zogan-*` 属性の意味 |
+| **version skew** | キャッシュ済みHTML、client asset、server endpointが異なるdeploy世代になる状態 |
+| **client-only module** | SSR module graphから到達してはならないと明示されたmodule |
+
+## 0.2 パッケージ境界
+
+| import | 役割 | browser globalへのimport時アクセス |
+|---|---|---|
+| `zogan` | response helper、cache policy、`FragmentSlot`、Island descriptorとSSR | なし |
+| `zogan/client` | `start`、`refreshFragment`、Island loader型 | なし。`start()` 後にだけDOMへアクセス |
+| `zogan/vite` | Island client entry生成とclient-only到達検査 | なし。Vite/Node用 |
+
+`zogan/client` 自体はimport時にDOMへ触れないため、universal componentからtypeやevent handler用の関数をimportしてserverで評価できる。ただしserver routeで `start()` / `refreshFragment()` を実行しない。top-level browser accessやbrowser専用dependencyのためSSRで安全に評価できないapplication moduleはclient-onlyとして明示し、SSR graphから到達させない。
+
+## 0.3 「局所」の意味
+
+局所とは、単にDOMの一部分という意味ではない。次の責務が、そのmarkerを持つ要素とURLまたはIDの組へ閉じていることを指す。
+
+- 取得またはmodule loadを開始するtrigger
+- server fallback
+- 更新対象
+- cache boundary
+- 失敗時の挙動
+
+ページ遷移、履歴、document全体のloading状態はこの局所契約に含めない。

@@ -1,8 +1,8 @@
 /**
- * zogan/vite（付録 A.3）。
+ * zogan/vite の明示的な client-only 境界と Island entry plugin。
  *
- * 1 が本体：サーババンドルから client-only モジュールへの到達を、到達パス付きで失敗させる。
- * 2〜4 は利便性であり、1 だけは安全性の担保として外せない。
+ * サーババンドルから明示された client-only モジュールへの到達を、
+ * 到達パス付きで失敗させる。また Island の lazy client entry を生成する。
  */
 import type { Plugin } from "vite";
 import { isAbsolute, resolve } from "node:path";
@@ -10,9 +10,7 @@ import {
   findServerReachPath,
   formatReachError,
   hasClientOnlyDirective,
-  importsClientStore,
   matchesGlob,
-  type ModuleGraphLike,
 } from "./client-only.ts";
 import {
   generateIslandsEntry,
@@ -20,30 +18,23 @@ import {
   RESOLVED_VIRTUAL_ISLANDS_ID,
   VIRTUAL_ISLANDS_ID,
 } from "./islands-entry.ts";
-import { validateSource } from "./validate.ts";
 import type { ZoganPluginOptions } from "./contracts.ts";
 
-const DEFAULT_CLIENT_ONLY = ["**/stores/**"];
-
 const isClientOnlyModule = (id: string, code: string, globs: readonly string[]): boolean =>
-  importsClientStore(code) ||
-  hasClientOnlyDirective(code) ||
-  globs.some((glob) => matchesGlob(id, glob));
+  hasClientOnlyDirective(code) || globs.some((glob) => matchesGlob(id, glob));
 
 /** Creates the Vite plugin for Island entries and client-only boundary checks. */
 export const zoganVite = (options: ZoganPluginOptions = {}): Plugin => {
-  const globs = options.clientOnly ?? DEFAULT_CLIENT_ONLY;
+  const globs = options.clientOnly ?? [];
   const islandsDir = options.islandsDir ?? "src/islands";
   const clientOnlyIds = new Set<string>();
-  let isSsrBuild = false;
   let root = process.cwd();
 
   return {
     name: "zogan",
 
     configResolved(config) {
-      isSsrBuild = Boolean(config.build?.ssr);
-      root = config.root ?? root;
+      root = config.root;
     },
 
     resolveId(id) {
@@ -59,25 +50,17 @@ export const zoganVite = (options: ZoganPluginOptions = {}): Plugin => {
 
     transform(code, id) {
       if (isClientOnlyModule(id, code, globs)) clientOnlyIds.add(id);
-
-      // Compiled JavaScript can contain diagnostic strings that look like JSX.
-      if (/\.[jt]sx(?:\?|$)/.test(id)) {
-        for (const issue of validateSource(code, id)) {
-          if (issue.level === "error") this.error(issue.message);
-          else this.warn(issue.message);
-        }
-      }
       return null;
     },
 
     buildEnd(error) {
-      if (error !== undefined && error !== null) return;
-      // 1：走査対象はサーババンドルのグラフだけ
-      if (!isSsrBuild) return;
+      if (error !== undefined) return;
+      // Vite 8 の environment consumer を正本とし、multi-environment build でも
+      // 実際の server graph だけを検査する。
+      if (this.environment.config.consumer !== "server") return;
 
-      const graph = this as unknown as ModuleGraphLike;
       for (const id of clientOnlyIds) {
-        const path = findServerReachPath(graph, id);
+        const path = findServerReachPath(this, id);
         if (path !== null) this.error(formatReachError(path));
       }
     },

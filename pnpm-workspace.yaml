@@ -4,7 +4,6 @@ allowBuilds:
   esbuild: true
   workerd: true
 minimumReleaseAgeExclude:
-  - "@preact/signals@2.11.0"
   - hono@4.13.0 || 4.13.1
   - publint@0.3.23
   - "@cloudflare/workers-types@5.20260804.1"

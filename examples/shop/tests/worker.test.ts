@@ -7,71 +7,122 @@ const request = (path: string, init?: RequestInit) =>
   exports.default.fetch(new Request(`${origin}${path}`, init));
 
 const startSession = async (): Promise<string> => {
-  const response = await request("/_f/cart-badge");
+  const response = await request("/fragments/cart-badge");
   const cookie = response.headers.get("Set-Cookie")?.split(";", 1)[0];
   expect(cookie).toMatch(/^zogan_user=/);
   return cookie!;
 };
 
-const add = (cookie: string, version: number, quantity = 1) =>
+const addNatively = (cookie: string, productId = 1, quantity = 1) =>
   request("/cart/add", {
+    body: new URLSearchParams({ productId: String(productId), quantity: String(quantity) }),
+    headers: { Cookie: cookie, "Content-Type": "application/x-www-form-urlencoded" },
     method: "POST",
     redirect: "manual",
-    headers: { Cookie: cookie, "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      productId: "1",
-      quantity: String(quantity),
-      version: String(version),
-    }),
   });
 
-describe("Workers + D1 demo", () => {
-  it("isolates carts by HttpOnly user cookie", async () => {
+const addThroughApi = (cookie: string, productId = 1, quantity = 1) =>
+  request("/api/cart/items", {
+    body: JSON.stringify({ productId, quantity }),
+    headers: { Accept: "application/json", Cookie: cookie, "Content-Type": "application/json" },
+    method: "POST",
+  });
+
+describe("Workers + D1 vNext demo", () => {
+  it("returns one full representation per URL regardless of custom request headers", async () => {
+    const normal = await request("/products?category=home");
+    const custom = await request("/products?category=home", {
+      headers: { "X-Partial": "catalog,pager" },
+    });
+    const normalBody = await normal.text();
+
+    expect(await custom.text()).toBe(normalBody);
+    expect(normal.headers.get("Cache-Control")).toBe(
+      "public, max-age=0, s-maxage=60, stale-while-revalidate=300",
+    );
+    expect(normal.headers.get("Set-Cookie")).toBeNull();
+    expect(normal.headers.get("Vary")).toBeNull();
+    expect(normal.headers.get("X-Partial")).toBeNull();
+    expect(normalBody).toContain("Desk Lamp");
+    expect(normalBody).not.toContain("Field Notebook");
+    expect(normalBody).toContain('data-zogan-fragment="/fragments/cart-badge"');
+    expect(normalBody).toContain('data-zogan-island="AddToCart"');
+    expect(normalBody).not.toContain("data-partial");
+    expect(normalBody).not.toContain("data-store");
+  });
+
+  it("isolates carts by HttpOnly cookie and keeps private HTML out of caches", async () => {
     const first = await startSession();
-    expect((await add(first, 0)).status).toBe(303);
+    expect((await addNatively(first)).status).toBe(303);
 
     const firstCart = await request("/cart", { headers: { Cookie: first } });
     const secondCart = await request("/cart");
     expect(await firstCart.text()).toContain("Linen Tote × 1");
     expect(await secondCart.text()).toContain("Your cart is empty");
     expect(firstCart.headers.get("Cache-Control")).toBe("private, no-store");
-    expect(firstCart.headers.get("Vary")).toContain("Cookie");
+    expect(firstCart.headers.get("Vary")).toBe("Cookie");
+    expect(firstCart.headers.get("Set-Cookie")).toBeNull();
+    expect(secondCart.headers.get("Set-Cookie")).toMatch(/^zogan_user=/);
   });
 
-  it("increments cart versions monotonically and rejects stale writes", async () => {
+  it("provides an explicit JSON mutation API without protocol-specific headers", async () => {
     const cookie = await startSession();
-    expect((await add(cookie, 0)).status).toBe(303);
-    const stale = await add(cookie, 0);
-    expect(stale.status).toBe(409);
-    expect(await stale.text()).toContain("version");
+    const response = await addThroughApi(cookie, 1, 2);
 
-    const fragment = await request("/_f/cart-badge", { headers: { Cookie: cookie } });
-    expect(await fragment.text()).toContain('"version":1');
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toMatch(/^application\/json/);
+    expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(response.headers.get("Vary")).toBe("Cookie");
+    expect(response.headers.get("X-Zogan-Request")).toBeNull();
+    expect(await response.json()).toEqual({ count: 2, total: 13_600, version: 1 });
+
+    const invalid = await request("/api/cart/items", {
+      body: JSON.stringify({ productId: "one", quantity: 1 }),
+      headers: { Cookie: cookie, "Content-Type": "application/json" },
+      method: "POST",
+    });
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json()).toEqual({ error: "invalid cart item" });
   });
 
-  it("refuses checkout when requested inventory is unavailable", async () => {
+  it("uses explicit fragment routes with independent cache boundaries and no snapshots", async () => {
     const cookie = await startSession();
-    expect((await add(cookie, 0, 10)).status).toBe(303);
-    expect((await add(cookie, 1, 10)).status).toBe(303);
-    const response = await request("/checkout", { method: "POST", headers: { Cookie: cookie } });
+    expect((await addNatively(cookie)).status).toBe(303);
+
+    const badge = await request("/fragments/cart-badge", { headers: { Cookie: cookie } });
+    const badgeBody = await badge.text();
+    expect(badge.headers.get("Cache-Control")).toBe("private, no-store");
+    expect(badge.headers.get("Vary")).toBe("Cookie");
+    expect(badgeBody).toContain("<span>1</span>");
+    expect(badgeBody).not.toContain("data-store");
+
+    const stock = await request("/fragments/stock/1");
+    expect(stock.headers.get("Cache-Control")).toBe("public, max-age=0, s-maxage=10");
+    expect(stock.headers.get("Vary")).toBeNull();
+    expect(await stock.text()).toBe("12 available");
+  });
+
+  it("uses POST/Redirect/GET for native mutations", async () => {
+    const cookie = await startSession();
+    const added = await addNatively(cookie);
+    expect(added.status).toBe(303);
+    expect(added.headers.get("Location")).toBe("/cart");
+
+    const checkout = await request("/checkout", {
+      headers: { Cookie: cookie },
+      method: "POST",
+      redirect: "manual",
+    });
+    expect(checkout.status).toBe(303);
+    expect(checkout.headers.get("Location")).toMatch(/^\/orders\//);
+  });
+
+  it("rejects checkout when requested inventory is unavailable", async () => {
+    const cookie = await startSession();
+    expect((await addNatively(cookie, 1, 10)).status).toBe(303);
+    expect((await addNatively(cookie, 1, 10)).status).toBe(303);
+    const response = await request("/checkout", { headers: { Cookie: cookie }, method: "POST" });
     expect(response.status).toBe(409);
     expect(await response.text()).toContain("no longer available");
-  });
-
-  it("keeps snapshots off public responses and applies explicit cache boundaries", async () => {
-    const products = await request("/products");
-    const productsBody = await products.text();
-    expect(products.headers.get("Cache-Control")).toContain("public");
-    expect(products.headers.get("Set-Cookie")).toBeNull();
-    expect(products.headers.get("Vary")).toContain("X-Partial");
-    expect(productsBody).not.toContain("data-zogan-store");
-
-    const cookie = await startSession();
-    const cart = await request("/cart", { headers: { Cookie: cookie } });
-    expect(cart.headers.get("Cache-Control")).toBe("private, no-store");
-    expect(await cart.text()).toContain('data-store="cart"');
-
-    const stock = await request("/_f/stock/1");
-    expect(stock.headers.get("Cache-Control")).toContain("s-maxage=10");
   });
 });

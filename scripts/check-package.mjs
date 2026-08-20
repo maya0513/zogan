@@ -23,6 +23,12 @@ const run = (command, args) =>
     encoding: "utf8",
     env: childEnv,
   });
+const assertExports = (entry, actual, expected) => {
+  const names = Object.keys(actual).toSorted();
+  if (JSON.stringify(names) !== JSON.stringify(expected)) {
+    throw new Error(`${entry} exports ${names.join(", ")}; expected ${expected.join(", ")}`);
+  }
+};
 
 const temporary = mkdtempSync(join(tmpdir(), "zogan-package-check-"));
 
@@ -42,23 +48,30 @@ try {
   const packageRoot = join(temporary, "package");
   const modules = join(temporary, "node_modules");
   mkdirSync(modules);
-  for (const dependency of [
-    "@preact/signals",
-    "es-module-lexer",
-    "hono",
-    "preact",
-    "preact-render-to-string",
-    "vite",
-  ]) {
+  for (const dependency of ["hono", "preact", "preact-render-to-string", "vite"]) {
     const target = realpathSync(join(root, "node_modules", dependency));
     const destination = join(modules, dependency);
     mkdirSync(join(destination, ".."), { recursive: true });
     symlinkSync(target, destination, "dir");
   }
 
-  for (const entry of ["dist/server/index.js", "dist/client/index.js", "dist/vite/index.mjs"]) {
-    await import(pathToFileURL(join(packageRoot, entry)).href);
-  }
+  const [serverEntry, clientEntry, viteEntry] = await Promise.all(
+    ["dist/server/index.js", "dist/client/index.js", "dist/vite/index.mjs"].map(
+      (entry) => import(pathToFileURL(join(packageRoot, entry)).href),
+    ),
+  );
+  assertExports("zogan", serverEntry, [
+    "FragmentSlot",
+    "Island",
+    "cachePolicy",
+    "createZogan",
+    "defineClientIsland",
+    "defineIsland",
+    "privateNoStore",
+    "publicCache",
+  ]);
+  assertExports("zogan/client", clientEntry, ["refreshFragment", "start"]);
+  assertExports("zogan/vite", viteEntry, ["default", "zoganVite"]);
   for (const entry of [
     "dist/server/index.d.ts",
     "dist/client/index.d.ts",
@@ -73,10 +86,12 @@ try {
   writeFileSync(
     smoke,
     [
-      'import { zogan, Partial } from "zogan";',
-      'import { start, navigate } from "zogan/client";',
-      'import { zoganVite } from "zogan/vite";',
-      "void [zogan, Partial, start, navigate, zoganVite];",
+      'import { cachePolicy, createZogan, defineClientIsland, defineIsland, FragmentSlot, Island, privateNoStore, publicCache, type CachePolicy, type IslandDescriptor, type ZoganOptions } from "zogan";',
+      'import { refreshFragment, start } from "zogan/client";',
+      'import { zoganVite, type ZoganPluginOptions } from "zogan/vite";',
+      "type Types = [CachePolicy, IslandDescriptor, ZoganOptions, ZoganPluginOptions];",
+      "void (null as unknown as Types);",
+      "void [cachePolicy, createZogan, defineClientIsland, defineIsland, FragmentSlot, Island, privateNoStore, publicCache, refreshFragment, start, zoganVite];",
     ].join("\n"),
   );
   run("pnpm", [

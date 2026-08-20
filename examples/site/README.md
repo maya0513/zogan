@@ -1,6 +1,6 @@
 # zogan introduction site
 
-The static introduction site explains zogan's purpose, rendering model, safety boundary, and first setup. It is intentionally separate from the Workers + D1 application in `examples/shop`.
+The static introduction site explains zogan's Cache, Page, Fragment, and Island boundaries, its browser-owned navigation and form baseline, and its first setup. It is intentionally separate from the Workers + D1 application in `examples/shop`.
 
 ```sh
 pnpm exec vp run @zogan/site#dev

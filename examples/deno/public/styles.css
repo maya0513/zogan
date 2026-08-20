@@ -39,7 +39,7 @@ button {
   cursor: pointer;
 }
 
-[data-island="Clock"] {
+[data-zogan-fragment="/fragments/clock"] {
   display: inline-block;
   min-width: 12rem;
   font-variant-numeric: tabular-nums;

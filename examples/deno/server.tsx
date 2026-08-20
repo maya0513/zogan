@@ -1,6 +1,15 @@
 import { Hono } from "hono";
 import type { ComponentChildren } from "preact";
-import { Island, Partial, StoreSnapshot, zogan } from "zogan";
+import {
+  createZogan,
+  defineClientIsland,
+  defineIsland,
+  FragmentSlot,
+  Island,
+  publicCache,
+} from "zogan";
+import type { PageStatusProps, RefreshClockProps } from "./src/island-props.ts";
+import PageStatus from "./src/islands/PageStatus.tsx";
 
 type DenoRuntime = {
   readFile(path: string | URL): Promise<Uint8Array<ArrayBuffer>>;
@@ -13,9 +22,7 @@ type DenoRuntime = {
 
 const deno = (globalThis as unknown as { Deno: DenoRuntime }).Deno;
 
-const app = new Hono();
-
-const Layout = ({ children }: { children: ComponentChildren }): preact.JSX.Element => (
+const Layout = ({ children }: { children?: ComponentChildren }) => (
   <html lang="en">
     <head>
       <meta charSet="utf-8" />
@@ -24,77 +31,83 @@ const Layout = ({ children }: { children: ComponentChildren }): preact.JSX.Eleme
       <link rel="stylesheet" href="/styles.css" />
       <script type="module" src="/client.js" />
     </head>
-    <body data-client-nav>{children}</body>
+    <body>{children}</body>
   </html>
 );
 
-zogan(app, { layout: Layout, dev: true });
+const zogan = createZogan({ layout: Layout });
+const pageStatus = defineIsland<PageStatusProps>({
+  id: "PageStatus",
+  component: PageStatus,
+});
+const refreshClock = defineClientIsland<RefreshClockProps>({
+  id: "RefreshClock",
+  fallback: () => (
+    <button type="button" disabled>
+      Refresh server time
+    </button>
+  ),
+});
 
-const staticFiles = new Map([
-  ["/client.js", { file: "client.js", contentType: "text/javascript; charset=utf-8" }],
-  ["/styles.css", { file: "styles.css", contentType: "text/css; charset=utf-8" }],
-]);
+const app = new Hono();
 
-for (const [path, asset] of staticFiles) {
-  app.get(path, async (c) => {
-    try {
-      const body = await deno.readFile(new URL(`./dist/${asset.file}`, import.meta.url));
-      return new Response(body, {
-        headers: {
-          "Cache-Control": "public, max-age=300",
-          "Content-Type": asset.contentType,
-        },
-      });
-    } catch (error) {
-      if (error instanceof Error && error.name === "NotFound")
-        return c.text("Asset not built", 404);
-      throw error;
+const staticAsset = /^([A-Za-z0-9_.-]+)\.(js|css)$/;
+
+app.get("/:asset", async (c) => {
+  const match = staticAsset.exec(c.req.param("asset"));
+  if (match === null) return c.notFound();
+
+  const [, stem, extension] = match;
+  try {
+    const body = await deno.readFile(new URL(`./dist/${stem}.${extension}`, import.meta.url));
+    return new Response(body, {
+      headers: {
+        "Cache-Control": "public, max-age=300",
+        "Content-Type":
+          extension === "js" ? "text/javascript; charset=utf-8" : "text/css; charset=utf-8",
+      },
+    });
+  } catch (error) {
+    if (error instanceof Error && error.name === "NotFound") {
+      return c.text("Asset not built", 404);
     }
-  });
-}
+    throw error;
+  }
+});
 
-app.page("/", (c) => {
+app.get("/", (c) => {
   const requested = Number(c.req.query("page") ?? "1");
   const page = Number.isSafeInteger(requested) && requested > 0 ? requested : 1;
-  c.header("Cache-Control", "private, no-store");
-  return c.render(
+
+  return zogan.page(
+    c,
     <main>
       <p>Running with Deno, Hono, Preact, and zogan.</p>
-      <Partial name="content">
-        <h1>Page {page}</h1>
-        <nav aria-label="Pagination">
-          {page > 1 && (
-            <a href={`/?page=${page - 1}`} data-partial="content">
-              Previous
-            </a>
-          )}
-          <a href={`/?page=${page + 1}`} data-partial="content">
-            Next
-          </a>
-        </nav>
-        <StoreSnapshot name="page" data={{ version: page, page }} />
-        <Island name="PageStatus" trigger="load">
-          <output aria-live="polite">Confirmed page: {page}</output>
-        </Island>
-      </Partial>
+      <h1>Page {page}</h1>
+      <nav aria-label="Pagination">
+        {page > 1 && <a href={`/?page=${page - 1}`}>Previous</a>}
+        <a href={`/?page=${page + 1}`}>Next</a>
+      </nav>
+      <Island of={pageStatus} props={{ page }} trigger="load" />
       <section>
         <h2>Fragment</h2>
         <div class="row">
-          <Island name="Clock" fragment="/_f/clock" trigger="none">
+          <FragmentSlot src="/fragments/clock" trigger="manual">
             <time>Waiting for a refresh</time>
-          </Island>
-          <Island name="RefreshClock" trigger="load">
-            <button type="button">Refresh server time</button>
-          </Island>
+          </FragmentSlot>
+          <Island of={refreshClock} props={{ src: "/fragments/clock" }} trigger="load" />
         </div>
       </section>
     </main>,
+    { cache: publicCache({ sMaxAge: 60 }) },
   );
 });
 
-app.fragment("clock", (c) => {
-  c.header("Cache-Control", "public, max-age=0, s-maxage=5");
-  return c.render(<time dateTime={new Date().toISOString()}>{new Date().toISOString()}</time>);
+app.get("/fragments/clock", (c) => {
+  const now = new Date().toISOString();
+  return zogan.fragment(c, <time dateTime={now}>{now}</time>, {
+    cache: publicCache({ sMaxAge: 5 }),
+  });
 });
 
 app.notFound((c) => c.text("Not found", 404));

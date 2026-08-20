@@ -1,103 +1,44 @@
 # zogan 設計仕様
 
-Preact + Hono のための部分レンダリング、キャッシュ境界、Island、ソフトナビゲーションの仕様。
+このディレクトリは、現在の zogan 実装が提供する契約を記述する。zogan は Hono + Preact 向けの、明示的な HTML Fragment と型付き Island の小さなライブラリである。
 
-アーキテクチャは **ドーナツキャッシュ + アイランド + ソフトナビゲーション** の組み合わせ。新しい概念は含まない。
+中心となる考え方は次のとおり。
 
----
+> ページ遷移はブラウザに任せ、独立して更新する必要がある箇所だけを、明示した URL から HTML として取得する。対話性が必要な箇所だけを、明示した ID の Island として起動する。
 
-## この仕様書の読み方
+Fragment は HTTP を使う remote include であり、契約がゼロになるわけではない。ページ HTML、Fragment URL、応答 HTML、キャッシュポリシー、DOM marker、client runtime の間には契約がある。zogan が狙うのは、その契約をページ全体の暗黙な時系列へ広げず、各 `FragmentSlot` の近くに見える形で閉じることである。
 
-zogan が解こうとしている問題は 1 つだけです。
+## 読み方
 
-> **公開ページを共有キャッシュに載せながら、ユーザ固有の領域を安全に独立更新したい。**
-
-素直にやると、ユーザ固有の部分が 1 つでもあるだけでページ全体がキャッシュ不能になります。zogan は「外の殻」と「穴」を分離し、殻だけを CDN に載せます。名称の由来（母材に穴を彫って別素材を嵌める工芸技法）もここにあります。
-
-この 1 点から、仕様のほぼ全てが導かれます。
-
-| 章 | 何を決めているか | 何のためか |
-|---|---|---|
-| [§3 Partial](03-partial.md) | HTML のどの範囲を差し替えるか | URL が変われば中身も変わる部分を、ページと同じキャッシュキーで扱う |
-| [§4 Fragment](04-fragment.md) | どこに穴を開けるか | 殻を CDN キャッシュ可能にする |
-| [§5 Store](05-store.md) | 穴の中身をどこに置くか | 差し替えで消えない場所に共有状態を逃がす |
-| [§6 Island](06-island.md) | どこを対話可能にするか | 状態を持たない描画単位に徹させる |
-| [§7 クライアントランタイム](07-client-runtime.md) | いつ、何を、どの順で差し替えるか | 上 4 つを繋ぐ |
-
-**先に読むべきは [§2 全体構造](02-architecture.md)** です。5 つの部品がどう噛み合うかが分かれば、個別の章は参照だけで足ります。
-
----
-
-## 目次
-
-### 前提
-
-| ファイル | 内容 |
+| 文書 | 内容 |
 |---|---|
-| [00-glossary.md](00-glossary.md) | 名称、パッケージ構成、§0 用語 |
-| [01-scope.md](01-scope.md) | §1 スコープ — 作るもの / 作らないもの |
-| [02-architecture.md](02-architecture.md) | §2 全体構造 — 5 つの部品とライフサイクル |
+| [00-glossary.md](00-glossary.md) | 用語とパッケージ境界 |
+| [01-scope.md](01-scope.md) | 提供する機能、提供しない機能 |
+| [02-architecture.md](02-architecture.md) | 全体構造、不変条件、deploy境界 |
+| [03-cache-policy.md](03-cache-policy.md) | 明示的な `CachePolicy` |
+| [04-fragment.md](04-fragment.md) | `FragmentSlot` と HTML endpoint |
+| [05-island.md](05-island.md) | 型付きdescriptorとlazy Island |
+| [06-client-runtime.md](06-client-runtime.md) | `start` と `refreshFragment` |
+| [07-failure-modes.md](07-failure-modes.md) | fail-closed動作と残る弱点 |
+| [08-acceptance.md](08-acceptance.md) | テスト項目と品質ゲート |
+| [09-references.md](09-references.md) | 系譜、差分、採用しなかった設計 |
+| [appendix-a-api.md](appendix-a-api.md) | 公開APIと型の一覧 |
+| [appendix-b-markup.md](appendix-b-markup.md) | DOM markerとHTTPの一覧 |
 
-### 中核
+最初に [§2 全体構造](02-architecture.md) を読み、実装時は [付録A](appendix-a-api.md) と [付録B](appendix-b-markup.md) を参照する。
 
-| ファイル | 内容 |
-|---|---|
-| [03-partial.md](03-partial.md) | §3 Partial（差し替え領域） |
-| [04-fragment.md](04-fragment.md) | §4 Fragment（キャッシュの穴） |
-| [05-store.md](05-store.md) | §5 Store（共有状態） |
-| [06-island.md](06-island.md) | §6 Island（部分ハイドレーション） |
-| [07-client-runtime.md](07-client-runtime.md) | §7 クライアントランタイム |
+## 不変条件
 
-### 実装
+1. **1 URL は常に1表現。** ページURLは常に完全なHTML documentを返し、Fragment URLは常に埋め込み用HTMLを返す。
+2. **リンク、フォーム、履歴はnative。** zogan runtimeはdocument-levelのclick、submit、popstateを傍受しない。
+3. **境界はmarkupに明示する。** 更新対象は `FragmentSlot`、対話対象は `Island` だけである。
+4. **キャッシュは呼び出しごとに明示する。** ページとFragmentの応答生成に、opaqueな `CachePolicy` が必須である。
+5. **失敗してもserver fallbackを残す。** 検証、通信、module load、activateに失敗した領域を空にしない。
+6. **Island codeは必要になるまで読み込まない。** client entryはIDごとのdynamic import loaderを持つ。
+7. **server/client境界をbuildで検査する。** 明示したclient-only moduleがSSR entryから到達可能ならbuildを失敗させる。
 
-| ファイル | 内容 |
-|---|---|
-| [08-edge-cases.md](08-edge-cases.md) | §8 例外系 |
-| [09-roadmap.md](09-roadmap.md) | §9 実装順序 |
-| [10-acceptance.md](10-acceptance.md) | §10 受け入れテスト |
-| [11-open-questions.md](11-open-questions.md) | §11 意図的に未決定 |
-| [12-references.md](12-references.md) | §12 参照する既存実装 |
+## 正本
 
-### 付録（コントラクト層）
+公開契約の最終的な正本は、`src/server/index.ts`、`src/client/index.ts`、`src/vite/index.ts` と、それらを固定するテストである。この仕様はその実装を説明する。文書と実装が矛盾した場合は、実装とテストを確認し、同じ変更で文書も直す。
 
-本編で下された判断の帰結を、実装が直接参照できる形に書き下したものです。**新しい設計判断は含みません。** 本編と矛盾する記述があれば本編が正です。
-
-| ファイル | 内容 |
-|---|---|
-| [appendix-a-api.md](appendix-a-api.md) | サーバ / クライアント API の型シグネチャ |
-| [appendix-b-markup.md](appendix-b-markup.md) | `data-*` 属性・マーカー・HTTP ヘッダの完全一覧 |
-
----
-
-## 3 つの不変条件
-
-仕様全体で 3 箇所だけ「不変条件」と明示されています。実装時に例外を作らないこと。
-
-1. **[§4.3](04-fragment.md) Fragment 引数は URL 由来の ID のみ**
-   識別子はキャッシュキーである。ゆえに秘密を含めてはならない。ユーザ固有の値はハンドラ内で Cookie から読む。
-
-2. **[§5.3](05-store.md) Store モジュールはクライアント専用**
-   モジュールスコープの状態はサーバ上でリクエストを跨いで共有される。SSR 中に触れば A さんのカートが B さんに見える。ビルド時に検証して失敗させる。
-
-3. **[§5.5](05-store.md) snapshot はキャッシュ可能な応答に載せない**
-   応答本体はキャッシュされる。ゆえに秘密を含めてはならない。CDN に載る殻に snapshot を埋めれば、そのユーザの確定値が全ユーザへ配信される。
-
-1 と 3 は同じ原則の表と裏です。**キャッシュキーにも応答本体にも、ユーザ固有の値を置かない。** zogan が殻をキャッシュする以上、この 2 つが安全性の全部です。
-
-どれも「気をつける」では守れないため、機械的に強制します。強制の経路は 3 つあります。
-
-| 不変条件 | 強制の経路 |
-|---|---|
-| §4.3 | **API の型**（`FragmentHandler` の引数が `Context` のみ） |
-| §5.3 | **ビルドプラグイン**（`zogan/vite` が到達を検出して失敗） |
-| §5.5 | **実行時ミドルウェア**（snapshot の有無と `Cache-Control` を照合） |
-
-§5.5 だけ実行時なのは、snapshot の有無と `Cache-Control` の組み合わせが応答生成時にしか確定しないためです。
-
----
-
-## 判断に迷ったときの基準
-
-**公開HTML・キャッシュ・クライアント状態の境界を単純に保てるか**を基準にします。
-
-react-router や TanStack Router を目標に据えると肥大化して失敗します。汎用ルーティングフレームワークを作っているのではありません。詳細は [§1 スコープ](01-scope.md)。
+内部scanner、registry、module graph helper、test reset hookは公開APIではない。付録にも公開機能として記載しない。

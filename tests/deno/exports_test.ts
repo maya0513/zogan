@@ -11,7 +11,9 @@ const assertSameExports = (
   source: Record<string, unknown>,
   built: Record<string, unknown>,
 ): void => {
+  // oxlint-disable-next-line unicorn/no-array-sort -- Object.keys creates a fresh array
   const expected = Object.keys(source).sort();
+  // oxlint-disable-next-line unicorn/no-array-sort -- Object.keys creates a fresh array
   const actual = Object.keys(built).sort();
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
     throw new Error(`${name} exports differ: ${JSON.stringify({ expected, actual })}`);

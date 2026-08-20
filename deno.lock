@@ -5,10 +5,8 @@
     "npm:@cloudflare/vite-plugin@^1.51.1": "1.51.1_vite@8.2.1__@types+node@24.13.3_wrangler@4.120.0",
     "npm:@cloudflare/vitest-pool-workers@~0.20.3": "0.20.3_vitest@4.1.10__@types+node@24.13.3__@vitest+coverage-v8@4.1.10__happy-dom@20.11.1__jsdom@30.0.1__vite@8.2.1___@types+node@24.13.3",
     "npm:@playwright/test@^1.62.1": "1.62.1",
-    "npm:@preact/signals@^2.11.0": "2.11.0_preact@10.29.8__preact-render-to-string@6.7.0",
     "npm:@types/node@24": "24.13.3",
     "npm:@vitest/coverage-v8@^4.1.10": "4.1.10_vitest@4.1.10_@types+node@24.13.3_@vitest+browser-preview@4.1.10_happy-dom@20.11.1_jsdom@30.0.1_vite@8.2.1__@types+node@24.13.3",
-    "npm:es-module-lexer@^2.3.1": "2.3.1",
     "npm:happy-dom@^20.11.1": "20.11.1",
     "npm:hono@^4.13.0": "4.13.1",
     "npm:hono@^4.13.1": "4.13.1",
@@ -823,16 +821,6 @@
     },
     "@poppinss/exception@1.2.3": {
       "integrity": "sha512-dCED+QRChTVatE9ibtoaxc+WkdzOSjYTKi/+uacHWIsfodVfpsueo3+DKpgU5Px8qXjgmXkSvhXvSCz3fnP9lw=="
-    },
-    "@preact/signals-core@1.14.4": {
-      "integrity": "sha512-HNB6HYeYKhQbJ1aKl+YRjrS4+QWHLKX6qKoUsfS/m0vqzsVaEBiZiaKbG/e+NKk2ch5ALQr/ihWaMHxiCuuWHA=="
-    },
-    "@preact/signals@2.11.0_preact@10.29.8__preact-render-to-string@6.7.0": {
-      "integrity": "sha512-mmrZ8I/Wef+tmSsQSjZySLRlnvuYAVfSZEy1+HrFvSwBtQf8/zSM+bV7odllUXIhKzUkBjsNk+TLZ20nt7p6Gg==",
-      "dependencies": [
-        "@preact/signals-core",
-        "preact"
-      ]
     },
     "@publint/pack@0.1.6": {
       "integrity": "sha512-3uVNyGcVplhPZSLVyeIpL7+cIRn1YCSNHLG/rUIlBQMVH8YuN9++YF+5+UDIIO9RW98dujiUoTltO7RDB5bFJA==",
@@ -2536,7 +2524,6 @@
   },
   "workspace": {
     "dependencies": [
-      "npm:@preact/signals@^2.11.0",
       "npm:hono@^4.13.0",
       "npm:preact-render-to-string@^6.7.0",
       "npm:preact@^10.29.8",
@@ -2546,10 +2533,8 @@
       "dependencies": [
         "npm:@arethetypeswrong/cli@~0.18.5",
         "npm:@playwright/test@^1.62.1",
-        "npm:@preact/signals@^2.11.0",
         "npm:@types/node@24",
         "npm:@vitest/coverage-v8@^4.1.10",
-        "npm:es-module-lexer@^2.3.1",
         "npm:happy-dom@^20.11.1",
         "npm:hono@^4.13.1",
         "npm:jsdom@^30.0.1",
@@ -2576,7 +2561,6 @@
             "npm:@cloudflare/vite-plugin@^1.51.1",
             "npm:@cloudflare/vitest-pool-workers@~0.20.3",
             "npm:@playwright/test@^1.62.1",
-            "npm:@preact/signals@^2.11.0",
             "npm:@types/node@24",
             "npm:hono@^4.13.1",
             "npm:preact@^10.29.8",

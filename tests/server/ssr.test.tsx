@@ -1,201 +1,302 @@
-import { describe, expect, test, vi } from "vitest";
-import { currentRenderContext } from "../../src/server/render";
-import { Island, Partial, StoreSnapshot } from "../../src/server/index";
-import { renderZogan } from "../../src/server/render";
+import type { ComponentType } from "preact";
+import { render } from "preact-render-to-string";
+import { describe, expect, test } from "vitest";
+import {
+  FragmentSlot,
+  Island,
+  defineClientIsland,
+  defineIsland,
+  type FragmentElement,
+  type FragmentTrigger,
+  type JsonObject,
+} from "../../src/server/index";
 
-const page = (vnode: Parameters<typeof renderZogan>[0], dev = true) =>
-  renderZogan(vnode, { kind: "page", dev, fragmentPrefix: "/_f/" });
+type CounterProps = JsonObject & { count: number; label: string };
 
-test("render context は c.render() 相当の描画外では参照できない", () => {
-  expect(() => currentRenderContext()).toThrow(/c\.render/);
-});
+const FRAGMENT_TRIGGERS = [
+  "load",
+  "idle",
+  "visible",
+  "manual",
+  "media:(prefers-reduced-motion)",
+] as const satisfies readonly FragmentTrigger[];
 
-describe("§3.3 <Partial> のマーカー出力", () => {
-  test("ラッパー要素を挟まずコメントで範囲を示す", () => {
-    const html = page(
-      <div class="grid">
-        <Partial name="results">
-          <article>a</article>
-        </Partial>
-      </div>,
-    ).html;
-    expect(html).toBe(
-      '<div class="grid"><!--p:results--><article>a</article><!--/p:results--></div>',
-    );
-  });
+const Counter: ComponentType<CounterProps> = ({ count, label }) => (
+  <button type="button">
+    {label}: {count}
+  </button>
+);
 
-  test("入れ子を許可する（§3.1.2）", () => {
-    const html = page(
-      <Partial name="results">
-        <Partial name="pager">1</Partial>
-      </Partial>,
-    ).html;
-    expect(html).toBe("<!--p:results--><!--p:pager-->1<!--/p:pager--><!--/p:results-->");
-  });
-
-  test("<tbody> の中にも置ける（§3.3.3）", () => {
-    const html = page(
-      <table>
-        <tbody>
-          <Partial name="rows">
-            <tr>
-              <td>x</td>
-            </tr>
-          </Partial>
-        </tbody>
-      </table>,
-    ).html;
-    expect(html).toContain("<tbody><!--p:rows--><tr><td>x</td></tr><!--/p:rows--></tbody>");
-  });
-
-  test("名前が不正なら例外（§3.1.1）", () => {
-    expect(() => page(<Partial name="bad--name">x</Partial>).html).toThrow(/bad--name/);
-    expect(() => page(<Partial name="1bad">x</Partial>).html).toThrow(/1bad/);
-  });
-
-  test("同じ name を 2 回使うと例外（§3.1.1）", () => {
+describe("typed islands", () => {
+  test("hydrate descriptor は component を SSR し、固定 marker contract を出力する", () => {
+    const counter = defineIsland<CounterProps>({ id: "Counter", component: Counter });
     expect(
-      () =>
-        page(
-          <div>
-            <Partial name="results">a</Partial>
-            <Partial name="results">b</Partial>
-          </div>,
-        ).html,
-    ).toThrow(/results/);
-  });
-
-  test("本文にマーカーを偽装する制御文字が混ざっても外に出ない", () => {
-    const evil = `\u0000p:results\u0001<!--p:injected-->`;
-    const html = page(<Partial name="results">{evil}</Partial>).html;
-    expect(html).toBe("<!--p:results-->p:results&lt;!--p:injected--><!--/p:results-->");
-    // 偽の領域が生えていないこと
-    expect(html.match(/<!--p:/g)).toHaveLength(1);
-  });
-
-  test("宣言順に領域名を報告する", () => {
-    const out = page(
-      <div>
-        <Partial name="count">1</Partial>
-        <Partial name="results">a</Partial>
-      </div>,
-    );
-    expect(out.partialNames).toEqual(["count", "results"]);
-  });
-});
-
-describe("§3.4.1 mode と key", () => {
-  test("append で key が無ければ開発ビルドで例外", () => {
-    expect(
-      () =>
-        page(
-          <Partial name="results" mode="append">
-            a
-          </Partial>,
-        ).html,
-    ).toThrow(/key/);
-  });
-
-  test("本番ビルドでは警告に留め、描画は続行する", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const html = page(
-      <Partial name="results" mode="append">
-        a
-      </Partial>,
-      false,
-    ).html;
-    expect(html).toContain("<!--p:results-->a<!--/p:results-->");
-    expect(warn).toHaveBeenCalledOnce();
-    warn.mockRestore();
-  });
-
-  test("key があれば通る。mode と key はマーカーに出力しない（付録 A.1.5）", () => {
-    const html = page(
-      <Partial name="results" mode="append" key={3}>
-        a
-      </Partial>,
-    ).html;
-    expect(html).toBe("<!--p:results-->a<!--/p:results-->");
-  });
-
-  test("replace では key が無くてよい", () => {
-    expect(() => page(<Partial name="results">a</Partial>).html).not.toThrow();
-  });
-});
-
-describe("§4.2.2 Fragment は Partial を含まない", () => {
-  test("Fragment のレンダリングで <Partial> を使うと例外", () => {
-    expect(() =>
-      renderZogan(<Partial name="results">a</Partial>, {
-        kind: "fragment",
-        dev: true,
-        fragmentPrefix: "/_f/",
-      }),
-    ).toThrow(/fragment/i);
-  });
-});
-
-describe("§6.1 <Island>", () => {
-  test("data-* 属性を出力し、children を SSR する", () => {
-    const html = page(
-      <Island name="ProductGallery" trigger="visible" props={{ variant: "compact" }}>
-        <img src="/a.jpg" alt="" />
-      </Island>,
-    ).html;
-    expect(html).toBe(
-      '<div data-island="ProductGallery" data-props="{&quot;variant&quot;:&quot;compact&quot;}" data-trigger="visible"><img src="/a.jpg" alt/></div>',
+      render(<Island of={counter} props={{ count: 3, label: "Cart" }} trigger="visible" />),
+    ).toBe(
+      '<div data-zogan-island="Counter" data-zogan-mode="hydrate" data-zogan-trigger="visible" data-zogan-props="{&quot;count&quot;:3,&quot;label&quot;:&quot;Cart&quot;}"><button type="button">Cart: 3</button></div>',
     );
   });
 
-  test("trigger の既定は load。props 省略時は data-props を出さない", () => {
-    const html = page(
-      <Island name="CartBadge" fragment="/_f/cart-badge">
-        <span>—</span>
-      </Island>,
-    ).html;
-    expect(html).toBe(
-      '<div data-island="CartBadge" data-trigger="load" data-fragment="/_f/cart-badge"><span>—</span></div>',
+  test("mount descriptor は fallback を SSR する", () => {
+    const chart = defineClientIsland<CounterProps>({
+      id: "Chart",
+      fallback: ({ label }) => <p>{label} loading</p>,
+    });
+    expect(render(<Island of={chart} props={{ count: 3, label: "Sales" }} trigger="idle" />)).toBe(
+      '<div data-zogan-island="Chart" data-zogan-mode="mount" data-zogan-trigger="idle" data-zogan-props="{&quot;count&quot;:3,&quot;label&quot;:&quot;Sales&quot;}"><p>Sales loading</p></div>',
     );
   });
 
-  test("data-props は HTML 属性値としてエスケープされる（付録 B.1.2）", () => {
-    const html = page(<Island name="X" props={{ q: '"><script>alert(1)</script>' }} />).html;
-    // 二重引用符属性から脱出できないこと。" と < と & が実体化されていれば足りる
+  test("props は必須で、空 object も明示的に serialize する", () => {
+    const empty = defineIsland<JsonObject>({ id: "Empty", component: () => <span>ok</span> });
+    expect(render(<Island of={empty} props={{}} />)).toContain('data-zogan-props="{}"');
+    expect(render(<Island of={empty} props={{}} />)).toContain('data-zogan-trigger="load"');
+  });
+
+  test("props attribute を HTML escape し、markup injection を防ぐ", () => {
+    const search = defineIsland<JsonObject>({ id: "Search", component: () => null });
+    const html = render(
+      <Island of={search} props={{ q: '"><script>alert(1)</script>' }} trigger="load" />,
+    );
     expect(html).not.toContain("<script>");
     expect(html).toContain("&quot;");
     expect(html).toContain("&lt;script");
-    expect(html).toMatch(/^<div data-island="X" data-props="[^"]*" data-trigger="load"><\/div>$/);
   });
 
-  test("コンポーネント名が不正なら例外（§6.1.1）", () => {
-    expect(() => page(<Island name="cart-badge" />).html).toThrow(/cart-badge/);
+  test.each(["", "1Counter", "cart-badge", "a".repeat(65)])(
+    "不正な island id を descriptor 定義時に拒否する: %j",
+    (id) => expect(() => defineIsland<JsonObject>({ id, component: () => null })).toThrow(/id/i),
+  );
+
+  test.each(["manual", "none", "media:", "whenever"])(
+    "不正な island trigger を拒否する: %j",
+    (trigger) => {
+      const descriptor = defineIsland<JsonObject>({ id: "Trigger", component: () => null });
+      expect(() =>
+        render(
+          <Island
+            of={descriptor}
+            props={{}}
+            // @ts-expect-error runtime の境界も検証する
+            trigger={trigger}
+          />,
+        ),
+      ).toThrow(/trigger/i);
+    },
+  );
+
+  test("media trigger は空でない query を受け取る", () => {
+    const descriptor = defineIsland<JsonObject>({ id: "Media", component: () => null });
+    expect(
+      render(<Island of={descriptor} props={{}} trigger="media:(min-width: 60rem)" />),
+    ).toContain('data-zogan-trigger="media:(min-width: 60rem)"');
   });
 
-  test("fragmentPrefix 配下でない fragment は例外（§4.3.3）", () => {
-    expect(() => page(<Island name="X" fragment="/api/cart" />).html).toThrow(/_f/);
-    expect(() => page(<Island name="X" fragment="https://evil.example/_f/x" />).html).toThrow(
-      /origin|_f/i,
+  test.each([
+    ["undefined", { value: undefined }],
+    ["function", { value: () => undefined }],
+    ["symbol", { value: Symbol("x") }],
+    ["bigint", { value: 1n }],
+    ["NaN", { value: Number.NaN }],
+    ["Infinity", { value: Number.POSITIVE_INFINITY }],
+    ["Date", { value: new Date(0) }],
+    ["Map", { value: new Map() }],
+  ])("non-JSON props を拒否する: %s", (_label, props) => {
+    const descriptor = defineIsland<JsonObject>({ id: "Strict", component: () => null });
+    expect(() => render(<Island of={descriptor} props={props as JsonObject} />)).toThrow(/JSON/i);
+  });
+
+  test("cycle と symbol key を拒否する", () => {
+    const descriptor = defineIsland<JsonObject>({ id: "Strict", component: () => null });
+    const cyclic: Record<string, unknown> = {};
+    cyclic.self = cyclic;
+    expect(() => render(<Island of={descriptor} props={cyclic as JsonObject} />)).toThrow(
+      /cycle|cyclic/i,
+    );
+
+    const symbolKey = { ok: true } as Record<PropertyKey, unknown>;
+    symbolKey[Symbol("secret")] = true;
+    expect(() => render(<Island of={descriptor} props={symbolKey as JsonObject} />)).toThrow(
+      /symbol|JSON/i,
     );
   });
 
-  test("trigger が不正なら例外", () => {
-    // @ts-expect-error 不正な trigger
-    expect(() => page(<Island name="X" trigger="whenever" />).html).toThrow(/whenever/);
+  test("descriptor は実行可能な Preact component だけを受け取る", () => {
+    expect(() =>
+      defineIsland<JsonObject>({
+        // @ts-expect-error JavaScript caller が型を迂回した境界を検証する
+        component: null,
+        id: "Broken",
+      }),
+    ).toThrow(/component/i);
+  });
+
+  test("nested array を含む有限JSONをserializeする", () => {
+    const descriptor = defineIsland<JsonObject>({ id: "Arrays", component: () => null });
+    const html = render(
+      <Island of={descriptor} props={{ values: [null, true, "text", 1, { nested: [false] }] }} />,
+    );
+    expect(html).toContain(
+      "{&quot;values&quot;:[null,true,&quot;text&quot;,1,{&quot;nested&quot;:[false]}]}",
+    );
+  });
+
+  test("sparse、accessor、symbol、extra propertyを持つarrayを拒否する", () => {
+    const descriptor = defineIsland<JsonObject>({ id: "StrictArray", component: () => null });
+    const renderValues = (values: unknown[]): string =>
+      render(<Island of={descriptor} props={{ values } as JsonObject} />);
+
+    const sparse: unknown[] = [];
+    sparse.length = 1;
+    expect(() => renderValues(sparse)).toThrow(/JSON/i);
+
+    const accessor = ["safe"];
+    Object.defineProperty(accessor, 0, { enumerable: true, get: () => "computed" });
+    expect(() => renderValues(accessor)).toThrow(/plain enumerable JSON property/i);
+
+    const symbolKey = ["safe"] as unknown[] & Record<PropertyKey, unknown>;
+    symbolKey[Symbol("secret")] = true;
+    expect(() => renderValues(symbolKey)).toThrow(/symbol/i);
+
+    const extra = ["safe"] as unknown[] & { extra?: boolean };
+    extra.extra = true;
+    expect(() => renderValues(extra)).toThrow(/array property/i);
+  });
+
+  test("root propsとobject property descriptorもplain JSONに限定する", () => {
+    const descriptor = defineIsland<JsonObject>({ id: "StrictRoot", component: () => null });
+    for (const props of [null, [], new Date(0)]) {
+      expect(() =>
+        render(<Island of={descriptor} props={props as unknown as JsonObject} />),
+      ).toThrow(/plain JSON object/i);
+    }
+
+    const hidden: Record<string, unknown> = {};
+    Object.defineProperty(hidden, "value", { enumerable: false, value: "secret" });
+    expect(() => render(<Island of={descriptor} props={hidden as JsonObject} />)).toThrow(
+      /plain enumerable JSON property/i,
+    );
   });
 });
 
-describe("§5.2.1 <StoreSnapshot>", () => {
-  test("application/json として出力し、< のみを \\u003c に変換する", () => {
-    const html = page(
-      <StoreSnapshot name="cart" data={{ version: 41, note: '</script><b>&"' }} />,
-    ).html;
-    expect(html).toBe(
-      '<script type="application/json" data-store="cart">{"version":41,"note":"\\u003c/script>\\u003cb>&\\""}</script>',
+describe("FragmentSlot", () => {
+  test("既定 div に fragment src、trigger、fallback を出力する", () => {
+    expect(
+      render(
+        <FragmentSlot src="/fragments/cart?compact=1" trigger="visible">
+          <span>Loading</span>
+        </FragmentSlot>,
+      ),
+    ).toBe(
+      '<div data-zogan-fragment="/fragments/cart?compact=1" data-zogan-trigger="visible"><span>Loading</span></div>',
     );
-    expect(html).not.toContain("</script><b>");
   });
 
-  test("Store 名が不正なら例外", () => {
-    expect(() => page(<StoreSnapshot name="ca rt" data={{ version: 1 }} />).html).toThrow(/ca rt/);
+  test("as と通常 DOM attrs を wrapper へ forward する", () => {
+    expect(
+      render(
+        <FragmentSlot as="section" src="/feed" class="feed" aria-label="Feed" id="feed">
+          Fallback
+        </FragmentSlot>,
+      ),
+    ).toBe(
+      '<section class="feed" aria-label="Feed" id="feed" data-zogan-fragment="/feed" data-zogan-trigger="load">Fallback</section>',
+    );
+  });
+
+  test("table/select の contextual container と固有 attrs を許可する", () => {
+    expect(
+      render(
+        <FragmentSlot as="tbody" src="/rows" class="rows">
+          <tr>
+            <td>Fallback</td>
+          </tr>
+        </FragmentSlot>,
+      ),
+    ).toBe(
+      '<tbody class="rows" data-zogan-fragment="/rows" data-zogan-trigger="load"><tr><td>Fallback</td></tr></tbody>',
+    );
+    expect(
+      render(
+        <FragmentSlot as="select" src="/options" name="choice" multiple>
+          <option>Fallback</option>
+        </FragmentSlot>,
+      ),
+    ).toBe(
+      '<select name="choice" multiple data-zogan-fragment="/options" data-zogan-trigger="load"><option>Fallback</option></select>',
+    );
+  });
+
+  test.each(["svg", "template", "img", "input", "script", "style", "textarea", "option"])(
+    "置換containerとして未対応な as=%s を型と実行時で拒否する",
+    (tag) => {
+      expect(() =>
+        render(
+          <FragmentSlot
+            // @ts-expect-error unsupported container を JS 呼び出しでも fail-closed にする
+            as={tag}
+            src="/fragment"
+          />,
+        ),
+      ).toThrow(/as|container/i);
+    },
+  );
+
+  test("FragmentElement は対応済み HTML container の閉じた union である", () => {
+    const supported: FragmentElement = "span";
+    // @ts-expect-error foreign-content container は client parser の契約外
+    const unsupported: FragmentElement = "svg";
+    expect([supported, unsupported]).toEqual(["span", "svg"]);
+  });
+
+  test.each(FRAGMENT_TRIGGERS)("fragment trigger を受け取る: %s", (trigger) =>
+    expect(render(<FragmentSlot src="/fragment" trigger={trigger} />)).toContain(
+      `data-zogan-trigger="${trigger}"`,
+    ),
+  );
+
+  test.each(["none", "media:", "whenever"])("不正な fragment trigger を拒否する: %s", (trigger) => {
+    expect(() =>
+      render(
+        <FragmentSlot
+          src="/fragment"
+          // @ts-expect-error runtime の境界も検証する
+          trigger={trigger}
+        />,
+      ),
+    ).toThrow(/trigger/i);
+  });
+
+  test.each([
+    "",
+    "relative/path",
+    "//evil.example/x",
+    "https://evil.example/x",
+    "/x#hash",
+    "/x\\y",
+    "/a/./b",
+    "/a/../b",
+    "/a/%2e%2e/b",
+  ])("same-origin root-relative でない src を拒否する: %j", (src) => {
+    expect(() => render(<FragmentSlot src={src} />)).toThrow(/src|path|segment/i);
+  });
+
+  test("内部 data-zogan-* 属性の override を拒否する", () => {
+    expect(() =>
+      render(
+        <FragmentSlot
+          src="/safe"
+          {...({ "data-zogan-fragment": "/evil" } as Record<string, string>)}
+        />,
+      ),
+    ).toThrow(/data-zogan/i);
+    expect(() =>
+      render(
+        <FragmentSlot
+          src="/safe"
+          {...({ "data-zogan-extra": "nope" } as Record<string, string>)}
+        />,
+      ),
+    ).toThrow(/data-zogan/i);
   });
 });

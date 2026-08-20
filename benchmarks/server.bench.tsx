@@ -1,9 +1,25 @@
-/** @jsxImportSource preact */
+/* @jsxImportSource preact */
+import { Hono } from "hono";
+import type { ComponentChildren } from "preact";
 import { bench, describe } from "vitest";
-import { Partial } from "../src/server/partial";
-import { containsStoreSnapshot } from "../src/server/cache";
-import { extractPartials, findMarkers } from "../src/server/markers";
-import { renderZogan } from "../src/server/render";
+import {
+  FragmentSlot,
+  Island,
+  createZogan,
+  defineIsland,
+  publicCache,
+  type JsonObject,
+} from "../src/server/index";
+
+type PageStatusProps = JsonObject & {
+  readonly page: number;
+};
+
+const PageStatus = ({ page }: PageStatusProps) => <output>Page {page}</output>;
+const pageStatus = defineIsland<PageStatusProps>({
+  id: "PageStatus",
+  component: PageStatus,
+});
 
 const products = Array.from({ length: 100 }, (_, index) => (
   <article key={index}>
@@ -12,49 +28,50 @@ const products = Array.from({ length: 100 }, (_, index) => (
   </article>
 ));
 
-const renderPage = () =>
-  renderZogan(
-    <main>
-      <Partial name="count">100 results</Partial>
-      <Partial name="results">{products}</Partial>
-      <Partial name="pager">Page 1</Partial>
-    </main>,
-    { kind: "page", dev: false, fragmentPrefix: "/_f/" },
-  );
+const Layout = ({ children }: { children?: ComponentChildren }) => (
+  <html lang="en">
+    <head>
+      <title>Products</title>
+    </head>
+    <body>{children}</body>
+  </html>
+);
 
-const rendered = renderPage();
-const manyPartials = Array.from(
-  { length: 100 },
-  (_, index) => `<!--p:item-${index}--><span>${index}</span><!--/p:item-${index}-->`,
-).join("");
-const ranges = findMarkers(manyPartials);
-const snapshotDocument = `${rendered.html}<script type="application/json" data-store="cart">{"version":1}</script>`;
+const zogan = createZogan({ layout: Layout });
+const page = (
+  <main>
+    <h1>Products</h1>
+    <Island of={pageStatus} props={{ page: 1 }} />
+    <FragmentSlot src="/fragments/cart" trigger="manual">
+      <span>Cart unavailable</span>
+    </FragmentSlot>
+    <section>{products}</section>
+  </main>
+);
+const fragment = <section>{products.slice(0, 20)}</section>;
 
-describe("server rendering", () => {
-  bench("SSR: 100 products and 3 partials", () => {
-    renderPage();
+const pageApp = new Hono();
+pageApp.get("/", (c) =>
+  zogan.page(c, page, {
+    cache: publicCache({ sMaxAge: 60, staleWhileRevalidate: 30 }),
+  }),
+);
+
+const fragmentApp = new Hono();
+fragmentApp.get("/fragments/products", (c) =>
+  zogan.fragment(c, fragment, {
+    cache: publicCache({ sMaxAge: 5 }),
+  }),
+);
+
+describe("server response rendering", () => {
+  bench("Page render: 100 products and typed Island", async () => {
+    const response = await pageApp.request("/");
+    await response.text();
   });
 
-  bench("Partial extraction: 10 of 100 markers", () => {
-    extractPartials(
-      manyPartials,
-      [
-        "item-1",
-        "item-5",
-        "item-10",
-        "item-20",
-        "item-30",
-        "item-40",
-        "item-50",
-        "item-60",
-        "item-70",
-        "item-99",
-      ],
-      ranges,
-    );
-  });
-
-  bench("Snapshot scan: rendered document", () => {
-    containsStoreSnapshot(snapshotDocument);
+  bench("Fragment render: 20 product cards", async () => {
+    const response = await fragmentApp.request("/fragments/products");
+    await response.text();
   });
 });

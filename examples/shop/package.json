@@ -19,7 +19,6 @@
     "deploy:dry": "WRANGLER_LOG_PATH=/tmp/zogan-shop-wrangler.log wrangler deploy --dry-run"
   },
   "dependencies": {
-    "@preact/signals": "^2.11.0",
     "hono": "^4.13.1",
     "preact": "^10.29.8",
     "zogan": "workspace:*"

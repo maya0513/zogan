@@ -3,11 +3,9 @@
   "runtime": "Node 24.19.0 (Linux x64)",
   "maxRegression": 0.2,
   "medianMilliseconds": {
-    "DOM replacement: 20 product cards": 0.558057,
-    "Store merge: versioned snapshot": 0.000184,
-    "Fragment fan-out: select 75 of 100 islands": 0.277454,
-    "SSR: 100 products and 3 partials": 0.088409,
-    "Partial extraction: 10 of 100 markers": 0.005764,
-    "Snapshot scan: rendered document": 0.005015
+    "FragmentSlot fan-out/DOM replace: 75 of 100 slots": 22.939023,
+    "Lazy Island discovery/loader: 75 of 100 nodes": 12.689826,
+    "Page render: 100 products and typed Island": 0.083796,
+    "Fragment render: 20 product cards": 0.02403
   }
 }

@@ -1,63 +1,97 @@
 # 品質レポート
 
-このレポートの測定値はリポジトリから再現できます。生成されたレポートや現在のベンチマーク出力は正本として扱いません。リポジトリに保存されたゲートを満たさない場合、コマンドは失敗します。
+測定日：2026-08-20。数値は zogan vNext の実装から取得した。生成物ではなく、リポジトリに保存した設定・テスト・baseline を正本とし、閾値を満たさなければコマンド自体が失敗する。
+
+## 静的検査
+
+コマンド：`vp check`
+
+- Oxfmt による全対象ファイルの format check
+- Oxlint の warning ゼロ運用
+- type-aware rule と TypeScript Go toolchain による full type check
+- 未使用の lint disable を error 化
+- correctness、nursery、pedantic、performance、suspicious と、安全性、import、Promise、accessibility、hooks、Vitest の規則を error 化
+
+相互に矛盾する preference rule を一括で有効にはせず、実行環境や public API に必要な例外だけをファイル範囲付き override または理由付き disable として記録する。
 
 ## テストカバレッジ
 
-コマンド：`just coverage`
+コマンド：`vp test run --coverage`
 
-| 指標 | 測定値 | 必須値 |
-| ---- | -----: | -----: |
-| 文   | 98.01% |    95% |
-| 行   | 99.16% |    95% |
-| 関数 | 99.43% |    95% |
-| 分岐 | 94.07% |    90% |
+15 test files、230 tests が成功した。
 
-キャッシュの強制、ミドルウェアの安全境界、Store の整合、Fragment URL と結果配布の挙動、クライアント専用モジュールへの到達可能性については、ファイル単位のしきい値により、文・行・関数・分岐のすべてで 100% を要求します。
+| 指標       | 測定値 | 全体閾値 |
+| ---------- | -----: | -------: |
+| Statements | 98.05% |      95% |
+| Lines      | 98.77% |      95% |
+| Functions  | 98.27% |      95% |
+| Branches   | 96.79% |      90% |
+
+全体閾値に加え、次の重要境界へファイル単位の gate を置く。
+
+- `src/server/cache.ts`: statements／lines 95%、functions 100%、branches 95%
+- `src/server/zogan.ts`: 全指標 100%
+- `src/client/fragments.ts`: 全指標 100%
+- `src/vite/client-only.ts`: statements／lines／functions 100%、branches 90%
+- `src/vite/islands-entry.ts`: 全指標 100%
+
+テストは、必須 CachePolicy、Hono 非拡張、one URL／one representation、native link／form、Fragment の fetch 重複排除・race・削除 target・contextual parsing・failure fallback、nested Island、fresh props 回帰、typed descriptor、lazy loader、chunk／hydrate failure、client-only graph を含む。
 
 ## 性能基準
 
-コマンド：`just bench`
+コマンド：Node 24 で `vp run bench`
 
-環境：Linux x64 上の Node 24.19.0。ファイルは直列に実行します。比較には 3 回の実行で得た中央値をさらに中央値にした値を使い、リポジトリに保存された基準値より 20% を超えて遅い場合は失敗します。
+環境：Node 24.19.0、Linux x64。各 benchmark file を直列に三回実行し、その中央値を保存値と比較する。baseline より 20% を超えて遅い場合は失敗する。
 
-| ベンチマーク                               |      中央値 |
-| ------------------------------------------ | ----------: |
-| SSR：100 商品と 3 個の Partial             | 0.088409 ms |
-| Partial 抽出：100 マーカー中の 10 個       | 0.005764 ms |
-| snapshot 走査：レンダリング済み文書        | 0.005015 ms |
-| DOM 置換：20 個の商品カード                | 0.558057 ms |
-| Store マージ：バージョン付き snapshot      | 0.000184 ms |
-| Fragment の結果配布：100 Island 中の 75 個 | 0.277454 ms |
+| Benchmark                                         | baseline median |
+| ------------------------------------------------- | --------------: |
+| Page render: 100 products and typed Island        |     0.083796 ms |
+| Fragment render: 20 product cards                 |     0.024030 ms |
+| FragmentSlot fan-out/DOM replace: 75 of 100 slots |    22.939023 ms |
+| Lazy Island discovery/loader: 75 of 100 nodes     |    12.689826 ms |
 
-機械可読な正本は [`benchmarks/baseline.node24.json`](../benchmarks/baseline.node24.json) です。
+機械可読な正本は [`benchmarks/baseline.node24.json`](../benchmarks/baseline.node24.json) にある。
 
-## 公開物のバンドルサイズ
+## 公開 bundle と package
 
-コマンド：`just package-check`
+コマンド：`vp run package:check`
 
-| エントリ         | gzip 測定値 |   上限 |
-| ---------------- | ----------: | -----: |
-| `zogan/client`   |   11.69 KiB | 12 KiB |
-| `zogan` サーバー |    6.24 KiB |  7 KiB |
-| `zogan/vite`     |    3.87 KiB |  5 KiB |
+| Entry          | gzip 測定値 | hard limit |
+| -------------- | ----------: | ---------: |
+| `zogan/client` |    3.65 KiB |      5 KiB |
+| `zogan` server |    2.35 KiB |      4 KiB |
+| `zogan/vite`   |    2.90 KiB |      5 KiB |
 
-同じコマンドで実際の tarball を作成し、publint と Are The Types Wrong を実行します。さらに tarball 内のすべての JavaScript エントリを import し、それに対する型 import をコンパイルし、任意 peer dependency のメタデータを検証します。
+同じ command で実 tarball を作成し、publint、Are The Types Wrong、Vite 8 peer、全 runtime entry の import、公開 value export の allowlist、全 vNext API／型の consumer compile を検証する。npm package は ESM only である。
 
-## ランタイムとブラウザの検証
+## サンプルとブラウザ
 
-- ルートの単体テスト、契約テスト、回帰テストは Vitest で実行します。
-- Workers/D1 の統合テストは、分離された D1 ストレージを使って Workerd で実行します。
-- Playwright は JavaScript の有効時と無効時の両方で Chromium を実行します。
-- `wrangler deploy --dry-run` は、デプロイを行わずにデモのバンドルを検証します。
+- `vp run demo:check`: Shop の production build、生成済み Cloudflare binding 型、Workerd + D1 integration tests
+- `vp run ci:browser`: 紹介サイト、Shop、Deno サンプルの Chromium E2E と Cloudflare dry-run
+- Shop と Deno は JavaScript 有効／無効の両 project で native document navigation を検証
+- Shop は native form + PRG と app-owned JSON enhancement、private cart Fragment、stock Fragment を検証
+- production build は Island 実装を初期 entry に static import せず、使用する Island ごとの lazy chunk を生成。Shop E2E は対応markerがないdocumentで `AddToCart` chunkが取得されないことをnetwork request単位で検証する
 
-## Deno と JSR の検証
+## Deno、JSR、Node current
 
-コマンド：`vp run ci:deno`
+コマンド：`vp run ci:deno`、`vp run ci:node-current`
 
-- Deno 2.9 以降で、サーバー、DOM を使わないクライアント import、Vite エントリを検査・実行します。
-- 一時的な Deno コンシューマーから、作成済み npm tarball を import し、型検査して実行します。
-- JSR マニフェストのバージョン、export map、npm 依存の mapping、ソースだけを公開する境界、npm/JSR のランタイム export を自動比較します。
-- `deno publish --dry-run` は、実際に公開せず JSR へのアップロードを検証します。このコマンドで slow type を許可するのは、文書化された Hono のモジュール拡張自体が JSR によって slow type に分類されるためです。
-- Deno で Vite の本番ビルドを実行し、生成されたブラウザバンドルに Node 専用 import が含まれていれば失敗させます。
-- Playwright で、JavaScript 有効時のソフトナビゲーションと Island のハイドレーション、および JavaScript 無効時の通常ナビゲーションを検証します。
+- Deno 2.9+ で server／client／Vite source とサンプルを type check・test・build
+- 一時 Deno consumer から npm tarball の三 entry と vNext API／型を検証
+- npm／JSR の runtime export を比較し、publish file boundary と import map を検査
+- `deno doc --lint` と `deno publish --dry-run` を実行。Hono augmentation を廃止したため `--allow-slow-types` は使わず、peer typeとopaque symbolに由来する既知のprivate-type-refだけを名前単位で検査する
+- Node current job で build、unit tests、Vite peer を再検証
+
+## 再現するコマンド
+
+```sh
+vp check
+vp test run --coverage
+vp run package:check
+vp run demo:check
+vp run ci:browser
+vp run ci:deno
+vp run ci:node-current
+vp run deploy:check
+vp run bench
+```

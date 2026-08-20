@@ -1,9 +1,16 @@
 import type { ComponentChildren } from "preact";
-import { Island, Partial, StoreSnapshot } from "zogan";
+import { FragmentSlot, Island, defineIsland } from "zogan";
 import { cartSnapshot, formatPrice } from "../domain/cart";
 import type { Cart, Order, Product } from "../domain/types";
+import AddToCart, { type AddToCartProps } from "../islands/AddToCart";
 
 const clientEntry = import.meta.env.DEV ? "/src/client.ts" : "/assets/client.js";
+const EMPTY_VALUES: readonly string[] = [];
+
+const addToCart = defineIsland<AddToCartProps>({
+  component: AddToCart,
+  id: "AddToCart",
+});
 
 export const Layout = ({ children }: { children?: ComponentChildren }) => (
   <html lang="en">
@@ -14,18 +21,18 @@ export const Layout = ({ children }: { children?: ComponentChildren }) => (
       <link rel="stylesheet" href="/styles.css" />
       <script type="module" src={clientEntry} />
     </head>
-    <body data-client-nav>
+    <body>
       <header class="site-header">
         <a class="brand" href="/products">
           Zogan Objects
         </a>
         <nav aria-label="Primary">
           <a href="/products">Browse</a>
-          <Island name="CartBadge" fragment="/_f/cart-badge" trigger="load">
+          <FragmentSlot as="span" src="/fragments/cart-badge" trigger="load">
             <a class="cart-badge" href="/cart">
               Cart <span>—</span>
             </a>
-          </Island>
+          </FragmentSlot>
         </nav>
       </header>
       {children}
@@ -34,16 +41,12 @@ export const Layout = ({ children }: { children?: ComponentChildren }) => (
   </html>
 );
 
-const AddForm = ({ product, label }: { product: Product; label?: string }) => (
-  <Island name="AddToCart" props={{ productId: product.id, label }} trigger="load">
-    <form action="/cart/add" method="post">
-      <input type="hidden" name="productId" value={product.id} />
-      <input type="hidden" name="quantity" value="1" />
-      <button type="submit" disabled={product.inventory < 1}>
-        {label ?? "Add to cart"}
-      </button>
-    </form>
-  </Island>
+const AddForm = ({ product, label = "Add to cart" }: { product: Product; label?: string }) => (
+  <Island
+    of={addToCart}
+    props={{ disabled: product.inventory < 1, label, productId: product.id }}
+    trigger="load"
+  />
 );
 
 const ProductCard = ({ product }: { product: Product }) => (
@@ -77,13 +80,13 @@ export const ProductsPage = ({
         <p class="eyebrow">Useful things, quietly made</p>
         <h1>Objects for everyday rituals.</h1>
       </section>
-      <form class="filters" action="/products" method="get" data-partial="count,catalog,pager">
+      <form class="filters" action="/products" method="get">
         <label>
           Category
           <select name="category">
             <option value="">All</option>
             {["bags", "home", "stationery"].map((value) => (
-              <option value={value} selected={category === value}>
+              <option key={value} value={value} selected={category === value}>
                 {value}
               </option>
             ))}
@@ -91,31 +94,17 @@ export const ProductsPage = ({
         </label>
         <button type="submit">Apply</button>
       </form>
-      <Partial name="count">
-        <p class="result-count">{products.length} items on this page</p>
-      </Partial>
-      <Partial name="catalog">
-        <section class="product-grid" aria-label="Products">
-          {products.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </section>
-      </Partial>
-      <Partial name="pager">
-        <nav class="pager" aria-label="Pagination">
-          {page > 1 && (
-            <a href={query(page - 1)} data-partial="count,catalog,pager">
-              Previous
-            </a>
-          )}
-          <span>Page {page}</span>
-          {products.length === 4 && (
-            <a href={query(page + 1)} data-partial="count,catalog,pager">
-              Next
-            </a>
-          )}
-        </nav>
-      </Partial>
+      <p class="result-count">{products.length} items on this page</p>
+      <section class="product-grid" aria-label="Products">
+        {products.map((product) => (
+          <ProductCard key={product.id} product={product} />
+        ))}
+      </section>
+      <nav class="pager" aria-label="Pagination">
+        {page > 1 && <a href={query(page - 1)}>Previous</a>}
+        <span>Page {page}</span>
+        {products.length === 4 && <a href={query(page + 1)}>Next</a>}
+      </nav>
     </main>
   );
 };
@@ -128,35 +117,27 @@ export const ProductPage = ({ product }: { product: Product }) => (
       <h1>{product.name}</h1>
       <p>{product.description}</p>
       <strong class="price">{formatPrice(product.price)}</strong>
-      <Island
-        name="Stock"
-        fragment={`/_f/stock/${product.id}`}
-        props={{ inventory: product.inventory }}
-      >
-        <span>{product.inventory} available</span>
-      </Island>
+      <FragmentSlot as="span" src={`/fragments/stock/${product.id}`} trigger="load">
+        {product.inventory} available
+      </FragmentSlot>
       <AddForm product={product} label="Add one" />
     </section>
   </main>
 );
 
 export const CartBadgeFragment = ({ cart }: { cart: Cart }) => {
-  const snapshot = cartSnapshot(cart);
+  const { count } = cartSnapshot(cart);
   return (
-    <>
-      <StoreSnapshot name="cart" data={snapshot} />
-      <a class="cart-badge" href="/cart">
-        Cart <span>{snapshot.count}</span>
-      </a>
-    </>
+    <a class="cart-badge" href="/cart" aria-label={`${count} items in cart`}>
+      Cart <span>{count}</span>
+    </a>
   );
 };
 
 export const CartPage = ({ cart }: { cart: Cart }) => {
-  const snapshot = cartSnapshot(cart);
+  const { total } = cartSnapshot(cart);
   return (
     <main>
-      <StoreSnapshot name="cart" data={snapshot} />
       <h1>Your cart</h1>
       {cart.lines.length === 0 ? (
         <p>Your cart is empty.</p>
@@ -164,7 +145,7 @@ export const CartPage = ({ cart }: { cart: Cart }) => {
         <>
           <ul class="cart-lines">
             {cart.lines.map((line) => (
-              <li>
+              <li key={line.product.id}>
                 <span>
                   {line.product.name} × {line.quantity}
                 </span>
@@ -173,7 +154,7 @@ export const CartPage = ({ cart }: { cart: Cart }) => {
             ))}
           </ul>
           <p class="cart-total">
-            Total <strong>{formatPrice(snapshot.total)}</strong>
+            Total <strong>{formatPrice(total)}</strong>
           </p>
           <form action="/checkout" method="post">
             <button type="submit">Place demo order</button>
@@ -193,7 +174,7 @@ export const OrderPage = ({ order }: { order: Order }) => (
     </p>
     <ul>
       {order.lines.map((line) => (
-        <li>
+        <li key={line.product.id}>
           {line.product.name} × {line.quantity}
         </li>
       ))}
@@ -205,10 +186,10 @@ export const OrderPage = ({ order }: { order: Order }) => (
   </main>
 );
 
-export const FormsPage = ({ values = [] }: { values?: string[] }) => (
+export const FormsPage = ({ values = EMPTY_VALUES }: { values?: readonly string[] }) => (
   <main>
     <h1>Form behavior</h1>
-    <form action="/forms" method="get" data-partial="form-result">
+    <form action="/forms" method="get">
       <input type="hidden" name="action" value="base" />
       <label>
         <input type="checkbox" name="tag" value="linen" checked /> Linen
@@ -220,13 +201,11 @@ export const FormsPage = ({ values = [] }: { values?: string[] }) => (
         Preview values
       </button>
     </form>
-    <Partial name="form-result">
-      <section aria-live="polite" data-form-result>
-        <h2>Submitted values</h2>
-        <output>{values.join(" | ") || "Nothing submitted"}</output>
-      </section>
-    </Partial>
-    <form action="/native-fallback" method="post" data-fragment="/_f/cart-badge">
+    <section aria-live="polite" data-form-result>
+      <h2>Submitted values</h2>
+      <output>{values.join(" | ") || "Nothing submitted"}</output>
+    </section>
+    <form action="/native-fallback" method="post">
       <input type="hidden" name="source" value="fallback" />
       <button type="submit">Exercise native fallback</button>
     </form>

@@ -1,74 +1,80 @@
 # 設計判断
 
-この記録では、zogan の公開契約に重大な影響を与える実装上の判断を説明します。正本は引き続き仕様書です。
+この文書は、zogan vNext の公開契約を決めた理由を記録する。正確な規範は[仕様書](spec/README.md)と公開型である。
 
-## アプリケーションのセットアップと設定の所有権
+## 互換性を捨てて契約を縮小する
 
-公開セットアップ API は `zogan(app, options)` です。この API はレンダラーミドルウェアを組み込み、指定された Hono インスタンスにオプションを関連付けます。アプリケーションをキーとする `WeakMap` が `fragmentPrefix` などの設定を保持し、モジュール全体で共有されるアプリケーション設定は持ちません。これにより、同じ isolate 内にある 2 つの Hono アプリケーションが、互いの Fragment ルートを変更できないようにしています。
+zogan は `0.0.0` であり、旧 API の利用者を移行させるより、誤った抽象を残さないことを優先した。`Partial`、Store、soft navigation、フォーム傍受、独自通信ヘッダー、Hono の prototype／型拡張を削除し、alias、shim、deprecated export は設けない。
 
-Hono の `Env`、スキーマ、ベースパスのジェネリクスは戻り値の型に保持されます。`PageHandler`、`FragmentHandler`、レンダラーの契約はコンパイルテストで検証します。
+旧設計は、クライアントとサーバーが Partial 名、現在の DOM 形状、保存状態、履歴、独自ヘッダーを同時に理解する必要があった。どれか一つが deploy の前後でずれると、古い DOM と新しい応答を混ぜたページを成立させ得る。vNext は契約をなくすのではなく、明示した Fragment と Island の局所境界に閉じ込める。
 
-## 公開契約と実装の境界
+## ブラウザが文書を所有する
 
-公開エントリは `zogan`、`zogan/client`、`zogan/vite` の 3 つです。公開するのは文書化されたコンポーネント、関数、型だけです。マーカー解析、レンダラー内部、import グラフの補助関数、プロトコル解析、レジストリ、テスト用リセット処理は実装モジュール内に留めます。契約層を変えない限り、実装は再生成・再編成できます。
+通常の link、form、history、head、scroll、focus はブラウザに任せる。zogan の client runtime は document の `click`、`submit`、`popstate` を監視しない。mutation の正本は通常フォームと PRG、またはアプリケーションが明示して所有する API である。
 
-## 依存関係の分類
+この境界を保つ判断基準は次の二文である。
 
-- `hono`、`preact`、`@preact/signals` は必須の peer dependency かつ開発依存です。ホストアプリケーションと zogan は、互換性のあるランタイムインスタンスと型を共有する必要があります。
-- `preact-render-to-string` は、zogan が SSR の実装で内部的に import するため通常の依存です。アプリケーションが直接インストールする必要はありません。
-- Vite 8 は任意の peer dependency です。必要なのは `zogan/vite` の利用者だけで、それ以前の Vite メジャーバージョンは互換性契約の対象外です。
-- ツールのバージョンは `package.json` と `pnpm-lock.yaml` で固定し、プレリリース版は選びません。
+1. zogan の JavaScript を外しても page、link、form は正しく動き、失われるのは明示的に遅延した鮮度と Island の対話性だけである。
+2. client と server の版がずれても、失敗は局所的な SSR／fallback 維持で閉じ、URL、mutation、global state、別領域を壊さない。
 
-## レンダリングマーカー
+履歴の横取り、任意 target、OOB swap、複数領域 transaction、server action、library-owned optimistic Store を追加する提案は、この判断を変更して full framework になるかを先に ADR で決めなければならない。
 
-Preact の文字列レンダラーは、通常のコンポーネントから兄弟位置へ生のコメントを出力できません。そのため SSR では、レンダリング単位の nonce を含む番兵文字列を出力し、一致する番兵だけを HTML コメントへ変換したうえで、一致しない制御文字列を除去します。マーカー範囲は一度だけ解析し、Partial の抽出と snapshot の検査で再利用します。
+## Hono を拡張しない Response factory
 
-Partial の mode は `X-Partial-Mode` で伝達し、HTML マーカーは順序付きの領域境界だけを表します。
+`createZogan({ layout })` は stateless な `page()` と `fragment()` を返す。アプリケーションは通常の `app.get()` で URL を登録し、Hono の `Context` と VNode を helper へ渡す。zogan は route を登録せず、Hono の prototype、module augmentation、request field、global registry を変更しない。
 
-## HTTP の安全境界
+`page()` は layout と doctype を適用した完全な HTML document を返す。`fragment()` は明示的な別 URL から wrapper の inner HTML だけを返す。同じ URL を要求ヘッダーで document と fragment に切り替えないため、`Vary` を伴う独自 representation negotiation は存在しない。
 
-`Cache-Control` は部分文字列ではなくディレクティブとして解析します。Store の snapshot を含む成功した HTML の GET/HEAD 応答には、正確な `no-store` ディレクティブが必要です。開発環境では例外を投げ、本番環境ではポリシーを `private, no-store` に置き換えて警告します。
+## Cache Policy を値として必須化する
 
-Fragment、ナビゲーション、フォームの応答は、DOM を変更する前に、同一オリジン、正規化された接頭辞、手動リダイレクト、HTML の Content-Type、順序付き応答ヘッダ、本文マーカーを検証します。リダイレクトには常に `redirect: "manual"` を指定します。
+すべての `page()`／`fragment()` 呼び出しは branded `CachePolicy` を必須とする。共有可能な応答は `publicCache()`、利用者固有または判断に迷う応答は `privateNoStore()`、追加 directive が必要な場合だけ検証付き `cachePolicy()` を使う。
 
-## クライアント状態と並行処理
+ポリシーは `Cache-Control` と任意の `Vary` token を生成する。duration、空値、HTTP field-valueに使えない文字、HTTP field-name でない `Vary` は生成前に拒否し、既存の `Vary` は大小文字を区別せず merge する。zogan はデータ依存を推測できないため、公開キャッシュにしてよいかという最終判断は handler の所有者に残す。
 
-ナビゲーション状態、Fragment の調停、Island の有効化、Store の登録には、それぞれ別の所有者を設けます。URL・ヘッダ・本文の純粋な解析処理は、可変レジストリの外に置きます。
+## Fragment は明示的な read-only HTML include
 
-同じ正規化済み Fragment URL に対する並行更新は 1 つのリクエストを共有し、接続中のすべての対象へ結果を配ります。Island のハイドレーションには有効化トークンを渡し、Island が削除・置換された場合は遅延処理を無効化します。
+`FragmentSlot` の `src` は root-relative な同一 origin の GET URL である。URL はアプリケーションが route として所有し、server は通常の `text/html` と標準キャッシュヘッダーを返す。opaque な endpoint、暗号化 props、独自 request／response header、server 指定の target や swap command は作らない。
 
-## Vite の解析
+runtime が所有するのは wrapper の子だけである。同じ URL の処理中 fetch は共有するが、結果は永続 cache しない。redirect、非 2xx、非 HTML、network error、古い応答、削除済み target、不正 URL／container では DOM を変更せず fallback を残す。置換時は古い descendant Island／Fragment を破棄し、新しい HTML 内の境界だけを起動する。
 
-クライアント専用モジュールへの到達可能性は、lexer の出力と Vite のモジュールグラフを基に判定します。名前付き import、名前空間 import、動的 import、再 export の経路も対象です。Island の仮想エントリは Vite のルートを基準に解決し、内部では正規化された絶対パスを使い、同名ファイルが複数ある曖昧な状態を拒否します。
+`FragmentElement` は安全に contextual parse でき、子を持てる HTML container の閉じた集合である。table／select 系は専用 context で parse し、document root、void、raw-text、template、embedded content、SVG／MathML は拒否する。
 
-## 性能ゲート
+Fragment は「契約がない」のではない。URL、GET、HTML、cache policy、wrapper ownership という小さく可視な remote include 契約であり、安全性はその狭さと fallback によって得る。
 
-Vitest のベンチマークでは、SSR、Partial 抽出、snapshot 走査、DOM 置換、Store のマージ、Fragment の結果配布を測定します。リポジトリに保存する基準値は Node 24 Active LTS で計測します。中央値が 20% を超えて悪化した場合は比較を失敗させます。この許容幅は、共有ランナーで通常発生する揺らぎを許容しつつ、構造的な性能劣化を検出するためのものです。Node 26 Current は小規模な互換性ジョブで検証し、性能の基準にはしません。
+## Island は型付き descriptor と lazy module の組である
 
-公開物の gzip 上限は、クライアントが 12 KiB、サーバーが 7 KiB、Vite プラグインが 5 KiB です。
+通常 Island は `defineIsland({ id, component })` で同じ Preact component を SSR と hydrate に使う。client-only Island は `defineClientIsland({ id, fallback })` で意味のある fallback を SSR し、client module を load できたときだけ mount で置換する。`Island` は descriptor から props 型を保持し、props を有限数・plain object・配列だけからなる厳格な JSON object に限定する。
 
-## Workers のデモ
+Vite plugin は `islandsDir` 直下の `.tsx` filename stem を stable ID とし、Island ごとの `() => import(...)` loader を生成する。初期 entry は Island implementation を static import せず、trigger に到達した ID だけを load する。通常 Island module は SSR-safe、`"use client-only"` または明示 glob の module は server graph から到達不能でなければならない。
 
-`examples/shop` は、純粋なドメインコード、D1 リポジトリ、Hono/Preact のプレゼンテーション、クライアント所有の楽観状態を分離したワークスペースパッケージです。public/private のキャッシュヘッダ、Cookie 単位のユーザー、単調増加するカートバージョン、フル HTML へのフォールバック、ローカルのマイグレーションとシードデータ、Workerd 統合テスト、Playwright フロー、本番ビルド、Wrangler の dry-run を実演します。CI にデプロイコマンドは含めません。
+Fragment と Island は一つの node を二重所有しない。Fragment の返却 HTML 内に Island を置くことはできるが、Island の内側に FragmentSlot／別 Island を置くことはできない。これにより、fresh fragment を古い shell props で再描画する経路をなくす。
 
-## README と紹介サイト
+## deploy skew は局所的に fail closed する
 
-リポジトリの README は導入までの短い経路であり、仕様書の複製ではありません。その構成は mizchi/similarity、Hono、Ky、Unhead、esbuild の公開ドキュメントに共通する流れに従います。目的を示し、プロジェクトが必要な理由を説明し、実行可能な最小例を提示し、中核概念を挙げ、詳細な契約は専用ドキュメントへ移します。
+旧 HTML と新しい asset が混在する可能性は消えない。Island ID／props schema を破壊的に変える場合は ID も変え、content-hashed chunk を使い、HTML の最大 TTL 以上は旧 asset を保持する。loader、module、props、hydrate が失敗した場合、runtime は既存 SSR を残す。
 
-`examples/site` はフレームワークを使わない Vite ビルドです。これにより紹介ページを静的ファイルとしてホストでき、zogan がドキュメントフレームワークを必要とするという誤解も避けられます。README と同じ情報階層を使い、応答モデルの図を追加し、Workers + D1 アプリケーションは製品定義の中心ではなく具体例として扱います。参照元の調査は [README と紹介サイトの先例](precedents.md) に記録しています。
+Fragment route の削除や意味変更にも互換期間を設ける。認証切れを login page の `200 text/html` として返すと slot に挿入できてしまうため、fragment route は redirect または非 2xx で失敗を明示する。CSS は shell で先に利用可能にするか、Island chunk と同じ寿命で配信する。
 
-## Cloudflare へのデプロイ
+## 公開 entry と依存を狭くする
 
-2 つの公開サンプルは、それぞれ独立した Cloudflare Workers としてデプロイします。紹介サイトには、旧式の Workers Sites 機能やフレームワークアダプターではなく Workers Static Assets を使います。デモには Cloudflare Vite プラグイン、Worker SSR、生成された Static Assets、本番用 D1 binding を使います。
+公開 entry は `zogan`、`zogan/client`、`zogan/vite` の三つだけである。client の runtime value は `start` と `refreshFragment` に限定し、内部 scanner、registry、parser、test hook は公開しない。server の value export は response／cache／Fragment／Island の八つ、Vite は named/default の `zoganVite` だけである。package smoke が allowlist を検査する。
 
-デプロイは、`main` への push に対するメイン CI ワークフローが成功した後、または明示的な手動実行時だけ行います。紹介サイトとデモには別々の保護された GitHub environments を設けますが、キャンセルを行わない共通の concurrency group を使います。本番 D1 のマイグレーションはデモのデプロイ前に実行します。再シードは変更可能な在庫を上書きするため、シードデータの投入は一度限りの手動操作とします。Cloudflare の認証情報は GitHub secrets に保存し、秘密ではない D1 リソース ID は正本である Wrangler 設定に保持します。
+`hono` と `preact` は peer dependency、`preact-render-to-string` は内部 runtime dependency、Vite 8 は optional peer とする。library-owned Store の削除に伴い Signals を除去し、client-only 判定から lexer の直接依存も除去した。
 
-## Deno、JSR、Deno Deploy
+## サンプルは progressive enhancement の受け入れ仕様である
 
-Deno 2.9 以降を対応ランタイムとします。ルートの `deno.json` は、`@maya0513/zogan` の TypeScript ソースから、サーバー、クライアント、Vite の同じエントリポイントを公開します。依存範囲は npm import mappings を通して npm の peer 互換性と一致させます。`examples/deno` はワークスペースメンバーで、`zogan` をリポジトリのソースへ解決するため、JSR パッケージが存在する前でもビルドできます。
+Workers + D1 shop は native filter／pagination／form／PRG を正本とする。cart badge と stock は明示的 Fragment、AddToCart だけが typed Island である。Island の mutation はアプリケーション固有 JSON API を呼び、成功後に badge Fragment を refresh する。POST dispatch 後の通信失敗は server commit 済みか判定できないため、native form を自動再送せず、reload を促して停止する。JavaScript 無効時は最初から native form／PRG が動く。
 
-既存の `zogan(app); app.page(...)` というコードの型を維持するため、Hono のメソッドとリクエストフィールドは意図的にモジュール拡張として表現します。JSR は ambient なモジュール拡張をすべて slow type と分類し、そのままでは公開できません。そのため JSR の dry-run では、この契約に限って `--allow-slow-types` を使います。このフラグを外すには、異なるアプリケーション型を返す破壊的 API 変更が必要です。
+Deno サンプルも native pagination を使い、clock を Fragment、page status と refresh button を typed Island として分離する。両サンプルは JavaScript 有効／無効の browser test を持ち、古い独自ヘッダーを送っても page representation が変わらないことを server test で固定する。
 
-ドキュメントの lint では、引き続き 3 つのエントリすべてに `deno doc --lint` を実行します。Deno 2.9 は、zogan が Hono、Preact、Signals、Vite の名前を再 export していないため、peer が所有するそれらの名前を private と報告します。これらの依存を再 export すると、意図的に狭くした公開範囲に反します。厳格なラッパーは、peer 型について列挙済みの `private-type-ref` 診断だけを許可し、ドキュメント不足、戻り値型の不足、zogan 内部型、新しい診断があれば失敗します。
+## 品質ゲート
 
-Deno の品質検査は独立した `deno-ci` ジョブで行い、Node の通常品質検査には加えません。Deno Deploy はルートマニフェストから動的ランタイム、インストールコマンド、ビルドコマンドを読み取ります。本番ビルドを起動する唯一の経路は Deno Web コンソールで設定したリポジトリ連携であり、このリポジトリには Deno のデプロイワークフローもデプロイトークンの処理も含めません。
+Vite+ を task、format、lint、type check、Vitest の単一入口とする。lint は type-aware と full type checking を有効にし、warnings と未使用 disable を error にする。correctness、nursery、pedantic、performance、suspicious と、import 境界、Promise、accessibility、React/Preact hook、test の全利用可能 plugin を有効にする。相互に矛盾する restriction や formatter と重複する style rule は category ごと一括適用せず、意味のある強い rule を明示する。
+
+coverage は全体閾値に加えて CachePolicy、response factory、Fragment runtime、Vite graph／entry にファイル単位の閾値を置く。benchmark は Node 24 で page render、fragment render、Fragment fan-out、lazy Island discovery を測る。package check は gzip budget、publint、Are The Types Wrong、全 entry の runtime／type import、公開 export allowlist を検証する。
+
+## 配布と deploy
+
+npm と JSR は同じ三 entry を公開する。Hono module augmentation を削除したため、JSR の `--allow-slow-types` は不要である。Deno source、npm tarball、Node current、Chromium、Workerd、Vite production build を独立した gate で検証する。
+
+Cloudflare の紹介サイトと Shop、Deno Deploy の公開例は引き続き別 deploy 単位とする。rolling deploy では cache された HTML と content-hashed asset の保持期間を揃え、deploy convenience のために runtime の ownership を広げない。

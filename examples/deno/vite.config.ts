@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 import { zoganVite } from "../../src/vite/index.ts";
 
-const root = fileURLToPath(new URL(".", import.meta.url));
+const root = import.meta.dirname;
 const clientEntry = fileURLToPath(new URL("../../src/client/index.ts", import.meta.url));
 
 export default defineConfig({

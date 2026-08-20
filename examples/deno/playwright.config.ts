@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
@@ -14,7 +16,7 @@ export default defineConfig({
   webServer: {
     command: "deno task build && PORT=4181 deno task start",
     url: "http://127.0.0.1:4181/",
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: process.env.CI === undefined,
     timeout: 120_000,
   },
 });

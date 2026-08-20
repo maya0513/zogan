@@ -1,11 +1,20 @@
 import { stripVTControlCharacters } from "node:util";
 
-const allowedExternalTypes = new Set([
+// Deno cannot currently follow named peer types or the private symbols used to
+// keep public descriptors nominal through a re-exporting entrypoint. Keep this
+// list exact instead of disabling slow-type/documentation analysis globally.
+const allowedPrivateTypes = new Set([
+  "cachePolicyBrand",
   "ComponentChildren",
   "ComponentType",
   "Context",
+  "descriptorComponent",
+  "descriptorProps",
   "Env",
+  "FRAGMENT_ELEMENTS",
   "Hono",
+  "JSXInternal",
+  "JSXInternal.IntrinsicElements",
   "ReadonlySignal",
   "Schema",
   "VNode",
@@ -31,11 +40,11 @@ export function checkDenoDocOutput(rawOutput) {
     if (
       diagnostic.code !== "private-type-ref" ||
       referenced === undefined ||
-      !allowedExternalTypes.has(referenced)
+      !allowedPrivateTypes.has(referenced)
     ) {
       throw new Error(`unexpected deno doc diagnostic: ${diagnostic.code}: ${diagnostic.message}`);
     }
   }
 
-  return `deno doc --lint reported only ${diagnostics.length} references to named peer-dependency types`;
+  return `deno doc --lint reported only ${diagnostics.length} references to named peer or opaque types`;
 }

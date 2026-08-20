@@ -1,3 +1,4 @@
+// oxlint-disable-next-line import/no-unassigned-import -- Vite owns the stylesheet side effect
 import "./styles.css";
 
 const copyButton = document.querySelector<HTMLButtonElement>("[data-copy]");
@@ -15,23 +16,27 @@ const copyWithSelection = (value: string): boolean => {
   return copied;
 };
 
-copyButton?.addEventListener("click", async () => {
-  const value = copyButton.dataset.copy;
+const copyInstallCommand = async (button: HTMLButtonElement): Promise<void> => {
+  const value = button.dataset.copy;
   if (!value) return;
 
   try {
     await navigator.clipboard.writeText(value);
   } catch {
     if (!copyWithSelection(value)) {
-      copyButton.textContent = "Select and copy";
+      button.textContent = "Select and copy";
       return;
     }
   }
 
-  copyButton.textContent = "Copied";
+  button.textContent = "Copied";
   window.setTimeout(() => {
-    copyButton.textContent = "Copy";
+    button.textContent = "Copy";
   }, 1800);
+};
+
+copyButton?.addEventListener("click", () => {
+  void copyInstallCommand(copyButton);
 });
 
 const navigation = document.querySelector<HTMLElement>("[data-navigation]");

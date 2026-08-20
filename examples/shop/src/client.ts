@@ -1,9 +1,6 @@
-import { start } from "zogan/client";
-import AddToCart from "./islands/AddToCart";
-import CartBadge from "./islands/CartBadge";
-import Stock from "./islands/Stock";
+import type { IslandLoader } from "zogan/client";
+import { islands } from "virtual:zogan/islands";
 
-start({
-  islands: { AddToCart, CartBadge, Stock },
-  refreshOnRestore: ["/_f/cart-badge"],
-});
+const islandLoaders: Readonly<Record<string, IslandLoader>> = islands;
+
+void islandLoaders;

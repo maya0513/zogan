@@ -1,555 +1,486 @@
-import { computed, useSignal } from "@preact/signals";
+import { Component } from "preact";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { parseHTMLFragment } from "../../src/client/dom";
-import { disposeIslandsIn, hydrateIslands, registerIslands } from "../../src/client/islands";
-import { __resetStores, clientStore } from "../../src/client/store";
-import { __resetFragments } from "../../src/client/fragments";
-import { urlOf } from "../helpers/url";
+import {
+  __resetIslands,
+  disposeIslandsIn,
+  hydrateIslands,
+  registerIslands,
+  type IslandComponent,
+  type IslandLoader,
+} from "../../src/client/islands";
 
 class FakeIntersectionObserver {
   static instances: FakeIntersectionObserver[] = [];
   disconnected = false;
-  targets: Element[] = [];
+  readonly targets: Element[] = [];
+
   constructor(
-    private callback: (entries: { isIntersecting: boolean; target: Element }[]) => void,
+    private readonly callback: (entries: { isIntersecting: boolean; target: Element }[]) => void,
     readonly options?: { rootMargin?: string },
   ) {
     FakeIntersectionObserver.instances.push(this);
   }
-  observe(el: Element) {
-    this.targets.push(el);
+
+  observe(target: Element) {
+    this.targets.push(target);
   }
+
   disconnect() {
     this.disconnected = true;
   }
-  unobserve(el: Element) {
-    this.targets = this.targets.filter((t) => t !== el);
-  }
-  enter() {
-    this.callback(this.targets.map((target) => ({ isIntersecting: true, target })));
+
+  enter(isIntersecting = true) {
+    this.callback(this.targets.map((target) => ({ isIntersecting, target })));
   }
 }
 
-const setBody = (html: string) => {
+const moduleOf = (component: IslandComponent): IslandLoader =>
+  vi.fn(async () => ({ default: component }));
+
+const setBody = (html: string): Element[] => {
   document.body.innerHTML = html;
-  return [...document.body.childNodes];
+  return [...document.body.children];
 };
 
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+const ThrowingIsland: IslandComponent = () => {
+  throw new Error("render failed");
+};
+
+const ClientIsland: IslandComponent = () => <span>client</span>;
+
+const island = (
+  id: string,
+  options: { mode?: string; trigger?: string; props?: string; body?: string } = {},
+) =>
+  `<div data-zogan-island="${id}" data-zogan-mode="${options.mode ?? "hydrate"}" ` +
+  `data-zogan-trigger="${options.trigger ?? "load"}" ` +
+  `data-zogan-props='${options.props ?? "{}"}'>${options.body ?? "<span>SSR</span>"}</div>`;
 
 beforeEach(() => {
-  __resetStores();
-  __resetFragments();
+  __resetIslands();
   FakeIntersectionObserver.instances = [];
   vi.stubGlobal("IntersectionObserver", FakeIntersectionObserver);
-  document.body.innerHTML = "";
+  document.body.replaceChildren();
 });
 
 afterEach(() => {
-  vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
-describe("§6.1.3 ハイドレートの手順", () => {
-  test("load trigger は走査した時点でハイドレートする", async () => {
-    const Counter = ({ label }: { label: string }) => <button>{label}</button>;
-    registerIslands({ Counter });
-    const nodes = setBody(
-      '<div data-island="Counter" data-props=\'{"label":"押す"}\'><button>押す</button></div>',
-    );
+describe("lazy islands", () => {
+  test("load lazily imports and hydrates SSR DOM", async () => {
+    const loader = moduleOf(({ label }: { label: string }) => (
+      <button type="button">{label}</button>
+    ));
+    registerIslands({ Counter: loader });
+    const container = setBody(
+      island("Counter", { props: '{"label":"Count"}', body: "<button>Count</button>" }),
+    )[0]!;
+    const button = container.firstChild;
 
+    hydrateIslands([...document.body.childNodes]);
+
+    await vi.waitFor(() => expect(loader).toHaveBeenCalledOnce());
+    expect(document.querySelector("button")).toBe(button);
+    expect(document.querySelector("button")!.textContent).toBe("Count");
+  });
+
+  test("mount mode replaces the explicit server fallback", async () => {
+    registerIslands({ Map: moduleOf(() => <button type="button">Open map</button>) });
+    hydrateIslands(setBody(island("Map", { mode: "mount", body: "<a>Map fallback</a>" })));
+
+    await vi.waitFor(() => expect(document.querySelector("button")?.textContent).toBe("Open map"));
+    expect(document.querySelector("a")).toBeNull();
+  });
+
+  test("a loader is memoized across island instances", async () => {
+    const loader = moduleOf(() => <span>ready</span>);
+    registerIslands({ Shared: loader });
+    hydrateIslands(setBody(island("Shared") + island("Shared")));
+
+    await vi.waitFor(() => expect(document.body.textContent).toBe("readyready"));
+    expect(loader).toHaveBeenCalledOnce();
+  });
+
+  test("visible waits for intersection and cleans its observer on disposal", async () => {
+    const loader = moduleOf(() => <span>visible</span>);
+    registerIslands({ BelowFold: loader });
+    const nodes = setBody(island("BelowFold", { trigger: "visible" }));
     hydrateIslands(nodes);
-    await flush();
-    expect(document.querySelector("button")!.textContent).toBe("押す");
-  });
 
-  test("対話できるようになる（SSR 済みの DOM を再利用する）", async () => {
-    const Toggle = () => {
-      // 消えてよい状態は useSignal（§6.2.1）
-      const open = useSignal(false);
-      return <button onClick={() => (open.value = !open.value)}>{open.value ? "閉" : "開"}</button>;
-    };
-    registerIslands({ Toggle });
-    hydrateIslands(setBody('<div data-island="Toggle"><button>開</button></div>'));
-    await flush();
+    expect(loader).not.toHaveBeenCalled();
+    expect(FakeIntersectionObserver.instances[0]!.options?.rootMargin).toBe("200px");
+    FakeIntersectionObserver.instances[0]!.enter(false);
+    expect(loader).not.toHaveBeenCalled();
+    FakeIntersectionObserver.instances[0]!.enter();
+    await vi.waitFor(() => expect(document.body.textContent).toBe("visible"));
 
-    document.querySelector("button")!.click();
-    await flush();
-    expect(document.querySelector("button")!.textContent).toBe("閉");
-  });
-
-  test("未登録のコンポーネントは警告して継続。SSR 済みの中身は残る", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    hydrateIslands(setBody('<div data-island="Nope"><span>SSR</span></div>'));
-    await flush();
-    expect(document.querySelector("span")!.textContent).toBe("SSR");
-    expect(warn).toHaveBeenCalled();
-  });
-
-  test("data-props が壊れていても落ちない", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const View = (props: { label?: string }) => <span>{props.label ?? "なし"}</span>;
-    registerIslands({ View });
-    hydrateIslands(setBody('<div data-island="View" data-props="{oops"><span>SSR</span></div>'));
-    await flush();
-    expect(document.querySelector("span")!.textContent).toBe("なし");
-    expect(warn).toHaveBeenCalled();
-  });
-
-  test("2 回走査してもハイドレートは 1 回だけ", async () => {
-    let renders = 0;
-    const Once = () => {
-      renders += 1;
-      return <span>x</span>;
-    };
-    registerIslands({ Once });
-    const nodes = setBody('<div data-island="Once"><span>x</span></div>');
-    hydrateIslands(nodes);
-    hydrateIslands(nodes);
-    await flush();
-    expect(renders).toBe(1);
-  });
-
-  test("走査対象は渡された範囲のみ。ページ全体を毎回走査しない", async () => {
-    let renders = 0;
-    const Only = () => {
-      renders += 1;
-      return <span>x</span>;
-    };
-    registerIslands({ Only });
-    setBody('<div data-island="Only"><span>x</span></div>');
-    hydrateIslands(parseHTMLFragment("<p>無関係</p>"));
-    await flush();
-    expect(renders).toBe(0);
-  });
-});
-
-describe("§6.1.2 trigger", () => {
-  test("visible は IntersectionObserver、既定の rootMargin は 200px", async () => {
-    const V = () => <span>hydrated</span>;
-    registerIslands({ V });
-    hydrateIslands(setBody('<div data-island="V" data-trigger="visible"><span>ssr</span></div>'));
-    await flush();
-
-    const io = FakeIntersectionObserver.instances[0]!;
-    expect(io.options?.rootMargin).toBe("200px");
-    expect(document.querySelector("span")!.textContent).toBe("ssr");
-
-    io.enter();
-    await flush();
-    expect(document.querySelector("span")!.textContent).toBe("hydrated");
-  });
-
-  test("idle は requestIdleCallback が無ければ setTimeout にフォールバックする", async () => {
-    vi.stubGlobal("requestIdleCallback", undefined);
-    const I = () => <span>hydrated</span>;
-    registerIslands({ I });
-    hydrateIslands(setBody('<div data-island="I" data-trigger="idle"><span>ssr</span></div>'));
-    expect(document.querySelector("span")!.textContent).toBe("ssr");
-    await new Promise((r) => setTimeout(r, 5));
-    expect(document.querySelector("span")!.textContent).toBe("hydrated");
-  });
-
-  test("idle は requestIdleCallback があれば利用し dispose で cancel する", () => {
-    const run = vi.fn(() => 7);
-    const cancel = vi.fn();
-    vi.stubGlobal("requestIdleCallback", run);
-    vi.stubGlobal("cancelIdleCallback", cancel);
-    registerIslands({ I: () => <span>x</span> });
-    const nodes = setBody('<div data-island="I" data-trigger="idle"><span>ssr</span></div>');
-    hydrateIslands(nodes);
-    disposeIslandsIn(nodes);
-    expect(run).toHaveBeenCalled();
-    expect(cancel).toHaveBeenCalledWith(7);
-  });
-
-  test("none は発火しない", async () => {
-    const N = () => <span>hydrated</span>;
-    registerIslands({ N });
-    hydrateIslands(setBody('<div data-island="N" data-trigger="none"><span>ssr</span></div>'));
-    await flush();
-    expect(document.querySelector("span")!.textContent).toBe("ssr");
-  });
-
-  test("media: はメディアクエリが真になったら発火する", async () => {
-    const listeners: ((e: { matches: boolean }) => void)[] = [];
-    vi.stubGlobal("matchMedia", (query: string) => ({
-      media: query,
-      matches: false,
-      addEventListener: (_: string, fn: (e: { matches: boolean }) => void) => listeners.push(fn),
-      removeEventListener: () => {},
-    }));
-    const M = () => <span>hydrated</span>;
-    registerIslands({ M });
-    hydrateIslands(
-      setBody(
-        '<div data-island="M" data-trigger="media:(min-width: 768px)"><span>ssr</span></div>',
-      ),
-    );
-    await flush();
-    expect(document.querySelector("span")!.textContent).toBe("ssr");
-
-    listeners[0]!({ matches: true });
-    await flush();
-    expect(document.querySelector("span")!.textContent).toBe("hydrated");
-  });
-
-  test("media: が最初から一致すれば直ちに hydrate する", async () => {
-    vi.stubGlobal("matchMedia", () => ({ matches: true }));
-    registerIslands({ M: () => <span>hydrated</span> });
-    hydrateIslands(setBody('<div data-island="M" data-trigger="media:any"><span>ssr</span></div>'));
-    await flush();
-    expect(document.querySelector("span")!.textContent).toBe("hydrated");
-  });
-
-  test("未知 trigger は警告して hydrate しない", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    registerIslands({ U: () => <span>hydrated</span> });
-    hydrateIslands(setBody('<div data-island="U" data-trigger="later"><span>ssr</span></div>'));
-    await flush();
-    expect(document.querySelector("span")!.textContent).toBe("ssr");
-    expect(warn).toHaveBeenCalled();
-  });
-});
-
-describe("§6.1.3 古い Island の後始末", () => {
-  test("差し替えで消える Island の IntersectionObserver を解除する", async () => {
-    const V = () => <span>x</span>;
-    registerIslands({ V });
-    const nodes = setBody('<div data-island="V" data-trigger="visible"><span>x</span></div>');
-    hydrateIslands(nodes);
-    await flush();
-
-    expect(FakeIntersectionObserver.instances[0]!.disconnected).toBe(false);
     disposeIslandsIn(nodes);
     expect(FakeIntersectionObserver.instances[0]!.disconnected).toBe(true);
   });
 
-  test("hydrate 済み Island は Preact tree を dispose する", async () => {
-    registerIslands({ V: () => <span>x</span> });
-    const nodes = setBody('<div data-island="V"><span>x</span></div>');
-    hydrateIslands(nodes);
-    await flush();
-    disposeIslandsIn(nodes);
-    expect((nodes[0] as Element).childNodes).toHaveLength(0);
-  });
-});
-
-describe("§6.1.5 Fragment を取得する Island", () => {
-  const fragmentHtml =
-    '<script type="application/json" data-store="cart">{"version":41,"count":3}</script><span>3</span>';
-
-  const mockFetch = (impl: (url: string) => Promise<Response> | Response) => {
-    const fn = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-      void init;
-      return Promise.resolve(impl(urlOf(input)));
-    });
-    vi.stubGlobal("fetch", fn);
-    return fn;
-  };
-
-  const htmlResponse = (body: string) =>
-    new Response(body, { status: 200, headers: { "Content-Type": "text/html; charset=utf-8" } });
-
-  test("trigger 発火時に 1 回だけ取得し、中身を丸ごと置換する", async () => {
-    const fetchMock = mockFetch(() => htmlResponse(fragmentHtml));
-    const CartBadge = () => <span>x</span>;
-    registerIslands({ CartBadge });
-    hydrateIslands(
-      setBody(
-        '<div data-island="CartBadge" data-fragment="/_f/cart-badge" data-trigger="load"><span>—</span></div>',
-      ),
-    );
-    await flush();
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [, init] = fetchMock.mock.calls[0]!;
-    expect(init?.credentials).toBe("same-origin");
-    expect(init?.redirect).toBe("manual");
-  });
-
-  test("同じ Fragment を使う複数 Island は取得を 1 リクエストへ集約する", async () => {
-    let resolveResponse: ((response: Response) => void) | undefined;
-    const fetchMock = vi.fn(
-      () =>
-        new Promise<Response>((resolve) => {
-          resolveResponse = resolve;
-        }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-    const CartBadge = () => <span>7</span>;
-    registerIslands({ CartBadge });
-    hydrateIslands(
-      setBody(
-        '<div id="first" data-island="CartBadge" data-fragment="/_f/cart-badge"><span>—</span></div>' +
-          '<div id="second" data-island="CartBadge" data-fragment="/_f/cart-badge"><span>—</span></div>',
-      ),
-    );
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-
-    resolveResponse?.(htmlResponse("<span>7</span>"));
-    await flush();
-    expect(document.getElementById("first")!.textContent).toBe("7");
-    expect(document.getElementById("second")!.textContent).toBe("7");
-  });
-
-  test("取得中に削除された Island へ遅延応答を反映・hydrate しない", async () => {
-    let resolveResponse: ((response: Response) => void) | undefined;
+  test("idle uses requestIdleCallback and media waits for a matching query", async () => {
+    let idle: (() => void) | undefined;
     vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        () =>
-          new Promise<Response>((resolve) => {
-            resolveResponse = resolve;
-          }),
-      ),
+      "requestIdleCallback",
+      vi.fn((callback: () => void) => {
+        idle = callback;
+        return 7;
+      }),
     );
-    let renders = 0;
-    registerIslands({
-      Late: () => {
-        renders += 1;
-        return <span>hydrated</span>;
-      },
-    });
-    const nodes = setBody(
-      '<div data-island="Late" data-fragment="/_f/late"><span>ssr</span></div>',
-    );
-    hydrateIslands(nodes);
-    disposeIslandsIn(nodes);
-    document.body.replaceChildren();
-
-    resolveResponse?.(htmlResponse("<span>late</span>"));
-    await flush();
-    expect(renders).toBe(0);
-  });
-
-  test("snapshot のマージが hydrate より先（§7.2.2）", async () => {
-    mockFetch(() => htmlResponse(fragmentHtml));
-    const base = clientStore<{ version: number; count: number }>("cart", { version: 0, count: 0 });
-    const seen: number[] = [];
-    const CartBadge = () => {
-      seen.push(base.value.count);
-      return <span>{base.value.count}</span>;
-    };
-    registerIslands({ CartBadge });
+    vi.stubGlobal("cancelIdleCallback", vi.fn());
+    const mediaListeners: ((event: { matches: boolean }) => void)[] = [];
+    vi.stubGlobal("matchMedia", () => ({
+      matches: false,
+      addEventListener: (_: string, listener: (event: { matches: boolean }) => void) =>
+        mediaListeners.push(listener),
+      removeEventListener: vi.fn(),
+    }));
+    const idleLoader = moduleOf(() => <span>idle</span>);
+    const mediaLoader = moduleOf(() => <span>media</span>);
+    registerIslands({ Idle: idleLoader, Media: mediaLoader });
     hydrateIslands(
-      setBody(
-        '<div data-island="CartBadge" data-fragment="/_f/cart-badge" data-trigger="load"><span>—</span></div>',
-      ),
+      setBody(island("Idle", { trigger: "idle" }) + island("Media", { trigger: "media:screen" })),
     );
-    await flush();
 
-    // 最初の描画から確定値を読んでいること。0 を挟んだら「3 が一瞬 0 になる」
-    expect(seen[0]).toBe(3);
-    expect(document.querySelector("span")!.textContent).toBe("3");
+    expect(idleLoader).not.toHaveBeenCalled();
+    expect(mediaLoader).not.toHaveBeenCalled();
+    idle?.();
+    mediaListeners[0]?.({ matches: false });
+    expect(mediaLoader).not.toHaveBeenCalled();
+    mediaListeners[0]?.({ matches: true });
+    await vi.waitFor(() => expect(document.body.textContent).toBe("idlemedia"));
   });
 
-  test("取得に失敗したら警告して SSR 済みの中身を残す", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    mockFetch(() => new Response("boom", { status: 500 }));
-    const CartBadge = () => <span>—</span>;
-    registerIslands({ CartBadge });
+  test("idle falls back to a timer and an initially matching media query loads immediately", async () => {
+    vi.stubGlobal("requestIdleCallback", undefined);
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    const idleLoader = moduleOf(() => <span>idle</span>);
+    const mediaLoader = moduleOf(() => <span>media</span>);
+    registerIslands({ Idle: idleLoader, Media: mediaLoader });
     hydrateIslands(
-      setBody(
-        '<div data-island="CartBadge" data-fragment="/_f/cart-badge" data-trigger="load"><span>—</span></div>',
-      ),
+      setBody(island("Idle", { trigger: "idle" }) + island("Media", { trigger: "media:all" })),
     );
-    await flush();
-    expect(document.querySelector("span")!.textContent).toBe("—");
-    expect(warn).toHaveBeenCalled();
-  });
 
-  test("fragmentPrefix 配下でない URL は拒否する（§10 の 15）", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const fetchMock = mockFetch(() => htmlResponse(fragmentHtml));
-    const X = () => <span>x</span>;
-    registerIslands({ X });
-    hydrateIslands(
-      setBody(
-        '<div data-island="X" data-fragment="/api/cart" data-trigger="load"><span>x</span></div>',
-      ),
-    );
-    await flush();
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalled();
-  });
-
-  test("外部オリジンの URL は拒否する", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-    const fetchMock = mockFetch(() => htmlResponse(fragmentHtml));
-    const X = () => <span>x</span>;
-    registerIslands({ X });
-    hydrateIslands(
-      setBody(
-        '<div data-island="X" data-fragment="https://evil.example/_f/cart-badge" data-trigger="load"><span>x</span></div>',
-      ),
-    );
-    await flush();
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  test("prefix の類似文字列は拒否する", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-    const fetchMock = mockFetch(() => htmlResponse(fragmentHtml));
-    registerIslands({ X: () => <span>x</span> });
-    hydrateIslands(setBody('<div data-island="X" data-fragment="/_f_evil/x"><span>x</span></div>'));
-    await flush();
-    expect(fetchMock).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(document.body.textContent).toBe("idlemedia"));
   });
 
   test.each([
-    ["redirect", new Response("", { status: 302, headers: { Location: "/login" } })],
+    ["missing loader", island("Missing")],
     [
-      "non-html",
-      new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }),
+      "missing props marker",
+      '<div data-zogan-island="Broken" data-zogan-mode="hydrate" data-zogan-trigger="load"><span>SSR</span></div>',
     ],
-  ])("%s 応答は DOM へ反映しない", async (_label, response) => {
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-    mockFetch(() => response);
-    registerIslands({ X: () => <span>ssr</span> });
-    hydrateIslands(setBody('<div data-island="X" data-fragment="/_f/x"><span>ssr</span></div>'));
-    await flush();
-    expect(document.querySelector("span")!.textContent).toBe("ssr");
-  });
-
-  test("network error は null に畳んで現在の DOM を残す", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.reject(new TypeError("offline"))),
-    );
-    registerIslands({ X: () => <span>ssr</span> });
-    hydrateIslands(setBody('<div data-island="X" data-fragment="/_f/x"><span>ssr</span></div>'));
-    await flush();
-    expect(document.querySelector("span")!.textContent).toBe("ssr");
-  });
-
-  test("trigger が none なら取得しない", async () => {
-    const fetchMock = mockFetch(() => htmlResponse(fragmentHtml));
-    const X = () => <span>x</span>;
-    registerIslands({ X });
-    hydrateIslands(
-      setBody(
-        '<div data-island="X" data-fragment="/_f/x" data-trigger="none"><span>x</span></div>',
-      ),
-    );
-    await flush();
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-});
-
-describe("§7.1.4 refreshFragment", () => {
-  test("data-fragment が完全一致する Island を全部同じ応答で更新する", async () => {
-    const { refreshFragment } = await import("../../src/client/fragments");
-    const fetchMock = vi.fn(() =>
-      Promise.resolve(
-        new Response("<span>7</span>", {
-          status: 200,
-          headers: { "Content-Type": "text/html" },
-        }),
-      ),
-    );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const CartBadge = () => <span>7</span>;
-    registerIslands({ CartBadge });
-    setBody(
-      '<div id="a" data-island="CartBadge" data-fragment="/_f/cart-badge"><span>—</span></div>' +
-        '<div id="b" data-island="CartBadge" data-fragment="/_f/cart-badge"><span>—</span></div>' +
-        '<div id="c" data-island="CartBadge" data-fragment="/_f/other"><span>—</span></div>',
-    );
-
-    await refreshFragment("/_f/cart-badge");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(document.getElementById("a")!.textContent).toBe("7");
-    expect(document.getElementById("b")!.textContent).toBe("7");
-    expect(document.getElementById("c")!.textContent).toBe("—");
-  });
-
-  test("反映先が 1 つも無ければ警告のみ。例外にしない", async () => {
-    const { refreshFragment } = await import("../../src/client/fragments");
+    ["invalid props", island("Broken", { props: "[1]" })],
+    ["null props", island("Broken", { props: "null" })],
+    ["primitive props", island("Broken", { props: "42" })],
+    ["malformed props", island("Broken", { props: "{" })],
+    ["non-finite nested props", island("Broken", { props: '{"nested":{"n":1e400}}' })],
+    ["non-div wrapper", island("Broken").replaceAll("div", "span")],
+    [
+      "unknown marker",
+      island("Broken").replace("data-zogan-props", 'data-zogan-future="v2" data-zogan-props'),
+    ],
+    [
+      "missing mode",
+      '<div data-zogan-island="Broken" data-zogan-trigger="load" data-zogan-props="{}"><span>SSR</span></div>',
+    ],
+    [
+      "missing trigger",
+      '<div data-zogan-island="Broken" data-zogan-mode="hydrate" data-zogan-props="{}"><span>SSR</span></div>',
+    ],
+    ["invalid mode", island("Broken", { mode: "replace" })],
+    ["invalid trigger", island("Broken", { trigger: "whenever" })],
+  ])("%s warns and preserves SSR", async (_label, html) => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
+    const loader = moduleOf(() => <span>client</span>);
+    registerIslands({ Broken: loader });
+    hydrateIslands(setBody(html));
 
-    await expect(refreshFragment("/_f/nowhere")).resolves.toBeUndefined();
-    expect(fetchMock).not.toHaveBeenCalled();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.body.textContent).toBe("SSR");
+    expect(loader).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalled();
   });
 
-  test("取得した snapshot を反映する", async () => {
-    const { refreshFragment } = await import("../../src/client/fragments");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() =>
-        Promise.resolve(
-          new Response(
-            '<script type="application/json" data-store="cart">{"version":42,"count":9}</script><span>9</span>',
-            { status: 200, headers: { "Content-Type": "text/html" } },
-          ),
-        ),
+  test("an invalid raw Island ID cannot activate even with a matching loader key", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const loader = moduleOf(() => <span>client</span>);
+    registerIslands({ "bad-id": loader });
+    hydrateIslands(
+      setBody(
+        '<div data-zogan-island="bad-id" data-zogan-mode="hydrate" data-zogan-trigger="load" data-zogan-props="{}"><span>SSR</span></div>',
       ),
     );
-    const base = clientStore<{ version: number; count: number }>("cart", { version: 41, count: 3 });
-    const cart = computed(() => base.value.count);
-    const CartBadge = () => <span>{base.value.count}</span>;
-    registerIslands({ CartBadge });
-    setBody('<div data-island="CartBadge" data-fragment="/_f/cart-badge"><span>3</span></div>');
 
-    await refreshFragment("/_f/cart-badge");
-    await flush();
-    expect(cart.value).toBe(9);
+    expect(loader).not.toHaveBeenCalled();
+    expect(document.body.textContent).toBe("SSR");
+    expect(warn).toHaveBeenCalled();
   });
 
-  test("取得失敗なら対象を変更しない", async () => {
-    vi.spyOn(console, "warn").mockImplementation(() => {});
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() => Promise.resolve(new Response("no", { status: 500 }))),
-    );
-    setBody('<div data-island="X" data-fragment="/_f/x"><span>old</span></div>');
-    const { refreshFragment } = await import("../../src/client/fragments");
-    await refreshFragment("/_f/x");
-    expect(document.querySelector("span")!.textContent).toBe("old");
+  test.each([
+    ["SVG", "http://www.w3.org/2000/svg"],
+    ["MathML", "http://www.w3.org/1998/Math/MathML"],
+  ])("a same-localName %s marker is not an HTML Island", (_label, namespace) => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const loader = moduleOf(() => <span>client</span>);
+    registerIslands({ Foreign: loader });
+    const element = document.createElementNS(namespace, "div");
+    element.setAttribute("data-zogan-island", "Foreign");
+    element.setAttribute("data-zogan-mode", "hydrate");
+    element.setAttribute("data-zogan-trigger", "load");
+    element.setAttribute("data-zogan-props", "{}");
+    element.textContent = "SSR";
+    document.body.append(element);
+
+    hydrateIslands([element]);
+
+    expect(loader).not.toHaveBeenCalled();
+    expect(element.textContent).toBe("SSR");
+    expect(warn).toHaveBeenCalled();
   });
 
-  test("取得中に対象が DOM から消えた場合は反映しない", async () => {
-    let resolveResponse: ((response: Response) => void) | undefined;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        () =>
-          new Promise<Response>((resolve) => {
-            resolveResponse = resolve;
-          }),
+  test("a rejected module preserves SSR and a later instance can retry", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const loader = vi
+      .fn<IslandLoader>()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce({ default: ClientIsland });
+    registerIslands({ Retry: loader });
+    hydrateIslands(setBody(island("Retry")));
+    await vi.waitFor(() => expect(loader).toHaveBeenCalledOnce());
+    expect(document.body.textContent).toBe("SSR");
+
+    const next = document.createElement("div");
+    next.innerHTML = island("Retry");
+    const element = next.firstElementChild!;
+    document.body.append(element);
+    hydrateIslands([element]);
+    await vi.waitFor(() => expect(loader).toHaveBeenCalledTimes(2));
+    expect(element.textContent).toBe("client");
+    expect(warn).toHaveBeenCalled();
+  });
+
+  test("a module without a default component preserves SSR", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const loader = vi.fn(async () => ({ default: null as unknown as IslandComponent }));
+    registerIslands({ Broken: loader });
+    hydrateIslands(setBody(island("Broken")));
+
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(document.body.textContent).toBe("SSR");
+  });
+
+  test("activation errors restore the exact server fallback", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    registerIslands({ Broken: moduleOf(ThrowingIsland) });
+    const element = setBody(
+      island("Broken", { mode: "mount", body: '<span data-state="server">fallback</span>' }),
+    )[0]!;
+    hydrateIslands([element]);
+
+    await vi.waitFor(() =>
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("failed to activate island"),
+        expect.any(Error),
       ),
     );
-    setBody('<div id="gone" data-island="X" data-fragment="/_f/x"><span>old</span></div>');
-    const { refreshFragment } = await import("../../src/client/fragments");
-    const refreshing = refreshFragment("/_f/x");
-    document.getElementById("gone")!.remove();
-    resolveResponse?.(
-      new Response("<span>new</span>", { headers: { "Content-Type": "text/html" } }),
-    );
-    await refreshing;
-    expect(document.getElementById("gone")).toBe(null);
+    expect(element.innerHTML).toBe('<span data-state="server">fallback</span>');
   });
 
-  test("reset された古い in-flight 完了は新しい coordinator 状態を消さない", async () => {
-    let resolveResponse: ((response: Response) => void) | undefined;
+  test("disposing pending triggers cancels idle, visibility, and media activation", () => {
+    let idle: (() => void) | undefined;
+    const cancelIdle = vi.fn();
+    let media: ((event: { matches: boolean }) => void) | undefined;
+    const removeMedia = vi.fn();
     vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        () =>
-          new Promise<Response>((resolve) => {
-            resolveResponse = resolve;
-          }),
+      "requestIdleCallback",
+      vi.fn((callback: () => void) => {
+        idle = callback;
+        return 1;
+      }),
+    );
+    vi.stubGlobal("cancelIdleCallback", cancelIdle);
+    vi.stubGlobal("matchMedia", () => ({
+      matches: false,
+      addEventListener: (_: string, listener: (event: { matches: boolean }) => void) => {
+        media = listener;
+      },
+      removeEventListener: removeMedia,
+    }));
+    const visibleLoader = moduleOf(() => <span>visible</span>);
+    const idleLoader = moduleOf(() => <span>idle</span>);
+    const mediaLoader = moduleOf(() => <span>media</span>);
+    registerIslands({ Visible: visibleLoader, Idle: idleLoader, Media: mediaLoader });
+    const nodes = setBody(
+      island("Visible", { trigger: "visible" }) +
+        island("Idle", { trigger: "idle" }) +
+        island("Media", { trigger: "media:screen" }),
+    );
+    hydrateIslands(nodes);
+
+    disposeIslandsIn(nodes);
+    FakeIntersectionObserver.instances[0]!.enter();
+    idle?.();
+    media?.({ matches: true });
+
+    expect(FakeIntersectionObserver.instances[0]!.disconnected).toBe(true);
+    expect(cancelIdle).toHaveBeenCalledWith(1);
+    expect(removeMedia).toHaveBeenCalledOnce();
+    expect(visibleLoader).not.toHaveBeenCalled();
+    expect(idleLoader).not.toHaveBeenCalled();
+    expect(mediaLoader).not.toHaveBeenCalled();
+  });
+
+  test("unavailable browser trigger APIs warn and preserve SSR", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal("IntersectionObserver", undefined);
+    vi.stubGlobal("matchMedia", undefined);
+    const visibleLoader = moduleOf(() => <span>visible</span>);
+    const mediaLoader = moduleOf(() => <span>media</span>);
+    registerIslands({ Visible: visibleLoader, Media: mediaLoader });
+
+    hydrateIslands(
+      setBody(
+        island("Visible", { trigger: "visible" }) + island("Media", { trigger: "media:screen" }),
       ),
     );
-    const { fetchFragment } = await import("../../src/client/fragments");
-    const pending = fetchFragment("/_f/x");
-    __resetFragments();
-    resolveResponse?.(new Response("<span>x</span>", { headers: { "Content-Type": "text/html" } }));
-    await expect(pending).resolves.toBe("<span>x</span>");
+
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(visibleLoader).not.toHaveBeenCalled();
+    expect(mediaLoader).not.toHaveBeenCalled();
+    expect(document.body.textContent).toBe("SSRSSR");
+  });
+
+  test("repeated scans are idempotent", async () => {
+    const loader = moduleOf(() => <span>ready</span>);
+    registerIslands({ Defaults: loader });
+    const element = setBody(island("Defaults"))[0]!;
+
+    hydrateIslands([element]);
+    hydrateIslands([element]);
+
+    await vi.waitFor(() => expect(element.textContent).toBe("ready"));
+    expect(loader).toHaveBeenCalledOnce();
+  });
+
+  test("removed targets do not mutate after lazy loading completes", async () => {
+    let resolve: ((module: { default: IslandComponent }) => void) | undefined;
+    const loader: IslandLoader = () => new Promise((done) => (resolve = done));
+    registerIslands({ Late: loader });
+    const nodes = setBody(island("Late"));
+    hydrateIslands(nodes);
+    await vi.waitFor(() => expect(resolve).toBeTypeOf("function"));
+    disposeIslandsIn(nodes);
+    document.body.replaceChildren();
+    resolve!({ default: () => <span>late</span> });
+
+    await new Promise((done) => setTimeout(done, 0));
+    expect(document.body.textContent).toBe("");
+  });
+
+  test("a lazy Island moved below another Island before loading stays SSR-only", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    let resolve: ((module: { default: IslandComponent }) => void) | undefined;
+    const loader: IslandLoader = () => new Promise((done) => (resolve = done));
+    registerIslands({ Late: loader });
+    const element = setBody(island("Late"))[0]!;
+    hydrateIslands([element]);
+    await vi.waitFor(() => expect(resolve).toBeTypeOf("function"));
+
+    const owner = document.createElement("div");
+    owner.setAttribute("data-zogan-island", "Owner");
+    element.replaceWith(owner);
+    owner.append(element);
+    resolve!({ default: () => <span>client</span> });
+
+    await new Promise((done) => setTimeout(done, 0));
+    expect(element.textContent).toBe("SSR");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("outer island owns"));
+  });
+
+  test.each([
+    ["id", (element: Element) => element.setAttribute("data-zogan-island", "Other")],
+    ["mode", (element: Element) => element.setAttribute("data-zogan-mode", "mount")],
+    ["trigger", (element: Element) => element.setAttribute("data-zogan-trigger", "idle")],
+    ["props", (element: Element) => element.setAttribute("data-zogan-props", '{"n":2}')],
+    ["unknown", (element: Element) => element.setAttribute("data-zogan-future", "v2")],
+  ])("%s marker drift before a deferred trigger never starts its loader", (_label, mutate) => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const loader = moduleOf(() => <span>client</span>);
+    registerIslands({ Deferred: loader });
+    const element = setBody(island("Deferred", { props: '{"n":1}', trigger: "visible" }))[0]!;
+    hydrateIslands([element]);
+
+    mutate(element);
+    FakeIntersectionObserver.instances[0]!.enter();
+
+    expect(loader).not.toHaveBeenCalled();
+    expect(element.textContent).toBe("SSR");
+    expect(warn).toHaveBeenCalled();
+  });
+
+  test.each([
+    ["id", (element: Element) => element.setAttribute("data-zogan-island", "Other")],
+    ["mode", (element: Element) => element.setAttribute("data-zogan-mode", "mount")],
+    ["trigger", (element: Element) => element.setAttribute("data-zogan-trigger", "idle")],
+    ["props", (element: Element) => element.setAttribute("data-zogan-props", '{"n":2}')],
+    ["unknown", (element: Element) => element.setAttribute("data-zogan-future", "v2")],
+  ])("%s marker drift during lazy loading cannot apply stale props", async (_label, mutate) => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    let resolve: ((module: { default: IslandComponent }) => void) | undefined;
+    const loader = vi.fn<IslandLoader>(() => new Promise((done) => (resolve = done)));
+    registerIslands({ Loading: loader });
+    const element = setBody(island("Loading", { props: '{"n":1}' }))[0]!;
+    hydrateIslands([element]);
+    await vi.waitFor(() => expect(loader).toHaveBeenCalledOnce());
+
+    mutate(element);
+    resolve!({ default: ({ n }: { n: number }) => <span>{n}</span> });
+
+    await new Promise((done) => setTimeout(done, 0));
+    expect(element.textContent).toBe("SSR");
+    expect(warn).toHaveBeenCalled();
+  });
+
+  test("disposal failures are contained", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const mounted = vi.fn();
+    class ThrowsOnUnmount extends Component {
+      override componentDidMount(): void {
+        mounted();
+      }
+
+      override componentWillUnmount(): void {
+        throw new Error("unmount failed");
+      }
+
+      override render() {
+        return <span>ready</span>;
+      }
+    }
+    registerIslands({ Fragile: moduleOf(ThrowsOnUnmount) });
+    const nodes = setBody(island("Fragile", { body: "<span>ready</span>" }));
+    hydrateIslands(nodes);
+    await vi.waitFor(() => expect(mounted).toHaveBeenCalledOnce());
+
+    disposeIslandsIn(nodes);
+
+    expect(warn).toHaveBeenCalledWith("zogan: failed to dispose an island", expect.any(Error));
+  });
+
+  test("nested islands are rejected so one Preact root owns each subtree", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const outer = moduleOf(() => <span>outer</span>);
+    const inner = moduleOf(() => <span>inner</span>);
+    registerIslands({ Outer: outer, Inner: inner });
+    hydrateIslands(
+      setBody(island("Outer", { body: island("Inner", { body: "<span>inner SSR</span>" }) })),
+    );
+
+    await vi.waitFor(() => expect(outer).toHaveBeenCalledOnce());
+    expect(inner).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalled();
   });
 });
