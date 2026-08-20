@@ -1,6 +1,6 @@
 # 品質レポート
 
-測定日：2026-08-20。数値は zogan vNext の実装から取得した。生成物ではなく、リポジトリに保存した設定・テスト・baseline を正本とし、閾値を満たさなければコマンド自体が失敗する。
+測定日：2026-08-21。数値は zogan vNext の実装から取得した。生成物ではなく、リポジトリに保存した設定・テスト・baseline を正本とし、閾値を満たさなければコマンド自体が失敗する。
 
 ## 静的検査
 
@@ -46,10 +46,10 @@
 
 | Benchmark                                         | baseline median |
 | ------------------------------------------------- | --------------: |
-| Page render: 100 products and typed Island        |     0.083796 ms |
-| Fragment render: 20 product cards                 |     0.024030 ms |
-| FragmentSlot fan-out/DOM replace: 75 of 100 slots |    22.939023 ms |
-| Lazy Island discovery/loader: 75 of 100 nodes     |    12.689826 ms |
+| Page render: 100 products and typed Island        |     0.100477 ms |
+| Fragment render: 20 product cards                 |     0.030345 ms |
+| FragmentSlot fan-out/DOM replace: 75 of 100 slots |    15.927440 ms |
+| Lazy Island discovery/loader: 75 of 100 nodes     |    11.812509 ms |
 
 機械可読な正本は [`benchmarks/baseline.node24.json`](../benchmarks/baseline.node24.json) にある。
 
