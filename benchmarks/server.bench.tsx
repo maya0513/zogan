@@ -49,6 +49,7 @@ const page = (
   </main>
 );
 const fragment = <section>{products.slice(0, 20)}</section>;
+const BATCH_SIZE = 50;
 
 const pageApp = new Hono();
 pageApp.get("/", (c) =>
@@ -65,13 +66,21 @@ fragmentApp.get("/fragments/products", (c) =>
 );
 
 describe("server response rendering", () => {
-  bench("Page render: 100 products and typed Island", async () => {
-    const response = await pageApp.request("/");
-    await response.text();
+  bench(`Page render: 100 products and typed Island (batch ${BATCH_SIZE})`, async () => {
+    await Promise.all(
+      Array.from({ length: BATCH_SIZE }, () =>
+        Promise.resolve(pageApp.request("/")).then((response) => response.text()),
+      ),
+    );
   });
 
-  bench("Fragment render: 20 product cards", async () => {
-    const response = await fragmentApp.request("/fragments/products");
-    await response.text();
+  bench(`Fragment render: 20 product cards (batch ${BATCH_SIZE})`, async () => {
+    await Promise.all(
+      Array.from({ length: BATCH_SIZE }, () =>
+        Promise.resolve(fragmentApp.request("/fragments/products")).then((response) =>
+          response.text(),
+        ),
+      ),
+    );
   });
 });

@@ -44,12 +44,12 @@
 
 環境：Node 24.19.0、Linux x64。各 benchmark file を直列に三回実行し、その中央値を保存値と比較する。baseline より 20% を超えて遅い場合は失敗する。
 
-| Benchmark                                         | baseline median |
-| ------------------------------------------------- | --------------: |
-| Page render: 100 products and typed Island        |     0.100477 ms |
-| Fragment render: 20 product cards                 |     0.030345 ms |
-| FragmentSlot fan-out/DOM replace: 75 of 100 slots |    15.927440 ms |
-| Lazy Island discovery/loader: 75 of 100 nodes     |    11.812509 ms |
+| Benchmark                                             | baseline median |
+| ----------------------------------------------------- | --------------: |
+| Page render: 100 products and typed Island (batch 50) |     5.030910 ms |
+| Fragment render: 20 product cards (batch 50)          |     1.480202 ms |
+| FragmentSlot fan-out/DOM replace: 75 of 100 slots     |    16.977579 ms |
+| Lazy Island discovery/loader: 75 of 100 nodes         |    10.822062 ms |
 
 機械可読な正本は [`benchmarks/baseline.node24.json`](../benchmarks/baseline.node24.json) にある。
 

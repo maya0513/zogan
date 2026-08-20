@@ -3,9 +3,9 @@
   "runtime": "Node 24.19.0 (Linux x64)",
   "maxRegression": 0.2,
   "medianMilliseconds": {
-    "FragmentSlot fan-out/DOM replace: 75 of 100 slots": 15.92744,
-    "Lazy Island discovery/loader: 75 of 100 nodes": 11.812509,
-    "Page render: 100 products and typed Island": 0.100477,
-    "Fragment render: 20 product cards": 0.030345
+    "FragmentSlot fan-out/DOM replace: 75 of 100 slots": 16.977579,
+    "Lazy Island discovery/loader: 75 of 100 nodes": 10.822062,
+    "Page render: 100 products and typed Island (batch 50)": 5.03091,
+    "Fragment render: 20 product cards (batch 50)": 1.4802015
   }
 }
