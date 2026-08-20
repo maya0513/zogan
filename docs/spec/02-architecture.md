@@ -11,7 +11,7 @@ Hono route ── Zogan.page() ──► complete HTML document
                                   ├─ FragmentSlot: fallback + URL + trigger
                                   └─ Island: SSR/fallback + ID + props + trigger
                                                     │
-                                      start() scans explicit markers
+                       explicit Island / Fragment runtimes scan their own markers
                                                     │
                          ┌──────────────────────────┴──────────────────────────┐
                          ▼                                                     ▼
@@ -19,9 +19,7 @@ Hono route ── Zogan.page() ──► complete HTML document
                          │                                                     │
                   Zogan.fragment()                                      hydrate / mount
                          │
-                replace slot children
-                         │
-             scan inserted Fragment/Island markers
+                replace slot children once
 ```
 
 page取得、Fragment取得、Island module loadは別の経路である。一方の失敗を、別の経路へ暗黙に昇格させない。
@@ -33,7 +31,8 @@ page取得、Fragment取得、Island module loadは別の経路である。一�
 | Hono application | request、database、Cookie | routeごとのVNode | client lifecycle |
 | `zogan` | `Context`、VNode、`CachePolicy` | HTML `Response` | route登録、data load |
 | server component | typed props | fallback/SSR markup | browser module registry |
-| `zogan/client` | explicit DOM markers、loader map | 局所DOM更新 | navigation、application state |
+| `zogan/client` | Island marker、loader map | Island hydrate/mount | navigation、Fragment取得 |
+| `zogan/fragments` | Fragment marker | 一回限りの局所HTML include | navigation、Island起動 |
 | `zogan/vite` | module graph、island directory | lazy client entry、build診断 | runtime data |
 
 ## 2.3 1 URL 1表現
@@ -93,7 +92,7 @@ zoganの契約は局所だが、時間契約が消えるわけではない。
 
 ## 2.6 version skewのguardrail
 
-runtimeはprotocol versionの交渉を実装していない。deployでは次を守る。
+runtimeはmarker protocol version 1をexactに検証するが、version negotiationはしない。deployでは次を守る。
 
 1. build assetはcontent hash付きで配信し、古いHTMLが参照するassetを直ちに消さない。
 2. 既存Island IDのprops schemaを破壊的に変えない。変える場合は新しいIDとfilenameを使うか、関連page cacheを同時にpurgeする。

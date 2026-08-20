@@ -35,7 +35,7 @@ zogan は `0.0.0` であり、旧 API の利用者を移行させるより、誤
 
 `FragmentSlot` の `src` は root-relative な同一 origin の GET URL である。URL はアプリケーションが route として所有し、server は通常の `text/html` と標準キャッシュヘッダーを返す。opaque な endpoint、暗号化 props、独自 request／response header、server 指定の target や swap command は作らない。
 
-runtime が所有するのは wrapper の子だけである。同じ URL の処理中 fetch は共有するが、結果は永続 cache しない。redirect、非 2xx、非 HTML、network error、古い応答、削除済み target、不正 URL／container では DOM を変更せず fallback を残す。置換時は古い descendant Island／Fragment を破棄し、新しい HTML 内の境界だけを起動する。
+runtime が所有するのは wrapper の子だけである。同じ URL の処理中 fetch は共有するが、結果は永続 cache せず、各slotは一度だけ取得する。redirect、非 2xx、非 HTML、network error、古い応答、削除済み target、不正 URL／container、nested markerを含むresponseではDOMを変更せずfallbackを残す。
 
 `FragmentElement` は安全に contextual parse でき、子を持てる HTML container の閉じた集合である。table／select 系は専用 context で parse し、document root、void、raw-text、template、embedded content、SVG／MathML は拒否する。
 
@@ -47,7 +47,7 @@ Fragment は「契約がない」のではない。URL、GET、HTML、cache poli
 
 Vite plugin は `islandsDir` 直下の `.tsx` filename stem を stable ID とし、Island ごとの `() => import(...)` loader を生成する。初期 entry は Island implementation を static import せず、trigger に到達した ID だけを load する。通常 Island module は SSR-safe、`"use client-only"` または明示 glob の module は server graph から到達不能でなければならない。
 
-Fragment と Island は一つの node を二重所有しない。Fragment の返却 HTML 内に Island を置くことはできるが、Island の内側に FragmentSlot／別 Island を置くことはできない。これにより、fresh fragment を古い shell props で再描画する経路をなくす。
+Fragment と Island は一つのnodeを二重所有しない。Fragment responseはFragmentSlot／Islandを含めず、Islandの内側にもFragmentSlot／別Islandを置けない。applicationが生成するnestはserver renderで拒否し、staleまたは改変markupはbrowser runtimeでfail closedにする。
 
 ## deploy skew は局所的に fail closed する
 
@@ -57,15 +57,15 @@ Fragment route の削除や意味変更にも互換期間を設ける。認証�
 
 ## 公開 entry と依存を狭くする
 
-公開 entry は `zogan`、`zogan/client`、`zogan/vite` の三つだけである。client の runtime value は `start` と `refreshFragment` に限定し、内部 scanner、registry、parser、test hook は公開しない。server の value export は response／cache／Fragment／Island の八つ、Vite は named/default の `zoganVite` だけである。package smoke が allowlist を検査する。
+公開entryは`zogan`、`zogan/client`、`zogan/fragments`、`zogan/vite`の四つである。Island runtimeは`start`、opt-in Fragment runtimeは`startFragments`だけを公開し、いずれもroot-scopedなdispose handleを返す。serverのvalue exportはresponse／cache／Fragment／Islandの八つ、Viteはnamed/defaultの`zoganVite`だけである。
 
 `hono` と `preact` は peer dependency、`preact-render-to-string` は内部 runtime dependency、Vite 8 は optional peer とする。library-owned Store の削除に伴い Signals を除去し、client-only 判定から lexer の直接依存も除去した。
 
 ## サンプルは progressive enhancement の受け入れ仕様である
 
-Workers + D1 shop は native filter／pagination／form／PRG を正本とする。cart badge と stock は明示的 Fragment、AddToCart だけが typed Island である。Island の mutation はアプリケーション固有 JSON API を呼び、成功後に badge Fragment を refresh する。POST dispatch 後の通信失敗は server commit 済みか判定できないため、native form を自動再送せず、reload を促して停止する。JavaScript 無効時は最初から native form／PRG が動く。
+Workers + D1 shop はnative filter／pagination／form／PRGを正本とする。cart badgeとstockは一度だけ読む明示的Fragment、AddToCartだけがtyped Islandである。Islandのmutationはアプリケーション固有JSON APIを呼び、成功確認後は完全Pageへ遷移する。POST dispatch後の通信失敗ではnative formを自動再送せず、reloadを促して停止する。
 
-Deno サンプルも native pagination を使い、clock を Fragment、page status と refresh button を typed Island として分離する。両サンプルは JavaScript 有効／無効の browser test を持ち、古い独自ヘッダーを送っても page representation が変わらないことを server test で固定する。
+Denoサンプルもnative paginationを使い、clockを一度だけ読むFragment、page statusをtyped Islandとする。両サンプルはJavaScript有効／無効のbrowser testを持つ。
 
 ## 品質ゲート
 
@@ -75,6 +75,6 @@ coverage は全体閾値に加えて CachePolicy、response factory、Fragment r
 
 ## 配布と deploy
 
-npm と JSR は同じ三 entry を公開する。Hono module augmentation を削除したため、JSR の `--allow-slow-types` は不要である。Deno source、npm tarball、Node current、Chromium、Workerd、Vite production build を独立した gate で検証する。
+npm と JSR は同じ四 entry を公開する。Hono module augmentation を削除したため、JSR の `--allow-slow-types` は不要である。Deno source、npm tarball、Node current、Chromium、Workerd、Vite production build を独立した gate で検証する。
 
 Cloudflare の紹介サイトと Shop、Deno Deploy の公開例は引き続き別 deploy 単位とする。rolling deploy では cache された HTML と content-hashed asset の保持期間を揃え、deploy convenience のために runtime の ownership を広げない。

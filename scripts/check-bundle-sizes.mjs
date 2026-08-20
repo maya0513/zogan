@@ -3,6 +3,7 @@ import { gzipSync } from "node:zlib";
 
 const budgets = [
   ["client", "dist/client/index.js", 5 * 1024],
+  ["fragments", "dist/fragments/index.js", 4 * 1024],
   ["server", "dist/server/index.js", 4 * 1024],
   ["vite", "dist/vite/index.mjs", 5 * 1024],
 ];

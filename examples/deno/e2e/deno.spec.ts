@@ -16,22 +16,12 @@ test("pagination performs ordinary document navigation with or without JavaScrip
   expect(await page.evaluate(() => performance.timeOrigin)).not.toBe(initialDocument);
 });
 
-test("RefreshClock Island refreshes the explicit clock FragmentSlot", async ({
-  page,
-}, testInfo) => {
-  test.skip(testInfo.project.name === "chromium-no-js", "Island activation requires JavaScript");
-
+test("clock Fragment is an opt-in one-shot HTML include", async ({ page }, testInfo) => {
   await page.goto("/");
   const clock = page.locator('[data-zogan-fragment="/fragments/clock"] time');
-  await expect(clock).toHaveText("Waiting for a refresh");
-
-  const refresh = page.getByRole("button", { name: "Refresh server time" });
-  await expect(refresh).toBeEnabled();
-  await refresh.click();
-  await expect(clock).not.toHaveText("Waiting for a refresh");
-  const first = await clock.textContent();
-
-  await page.waitForTimeout(10);
-  await refresh.click();
-  await expect.poll(() => clock.textContent()).not.toBe(first);
+  if (testInfo.project.name === "chromium-no-js") {
+    await expect(clock).toHaveText("Server time unavailable");
+  } else {
+    await expect(clock).not.toHaveText("Server time unavailable");
+  }
 });

@@ -1,10 +1,13 @@
 import { h, type ComponentChildren, type JSX } from "preact";
+import { useContext } from "preact/hooks";
 import { isFragmentElement, type FragmentElement } from "../shared/fragment-elements.ts";
+import { ZOGAN_PROTOCOL_VERSION } from "../shared/protocol.ts";
+import { islandOwner, renderKind } from "./boundary-context.ts";
 
 export type { FragmentElement } from "../shared/fragment-elements.ts";
 
 /** Browser trigger supported by a FragmentSlot. */
-export type FragmentTrigger = "load" | "idle" | "visible" | "manual" | `media:${string}`;
+export type FragmentTrigger = "load" | "idle" | "visible" | `media:${string}`;
 
 /** Props for a typed, replaceable HTML Fragment container. */
 export type FragmentSlotProps<Element extends FragmentElement = "div"> = {
@@ -24,7 +27,6 @@ const assertFragmentTrigger = (trigger: string): void => {
     trigger === "load" ||
     trigger === "idle" ||
     trigger === "visible" ||
-    trigger === "manual" ||
     (trigger.startsWith("media:") && trigger.slice("media:".length).trim() !== "");
   if (!valid) throw new TypeError(`zogan: invalid fragment trigger ${JSON.stringify(trigger)}`);
 };
@@ -59,6 +61,12 @@ const assertFragmentSrc = (src: string): void => {
 export function FragmentSlot<Element extends FragmentElement = "div">(
   props: FragmentSlotProps<Element>,
 ): ComponentChildren {
+  if (useContext(renderKind) === "fragment") {
+    throw new TypeError("zogan: FragmentSlot cannot be rendered inside a Fragment response");
+  }
+  if (useContext(islandOwner)) {
+    throw new TypeError("zogan: FragmentSlot cannot be rendered inside an Island");
+  }
   const { as, src, trigger = "load", children, ...forwarded } = props;
   assertFragmentSrc(src);
   assertFragmentTrigger(trigger);
@@ -78,6 +86,7 @@ export function FragmentSlot<Element extends FragmentElement = "div">(
   const attributes = {
     ...forwarded,
     "data-zogan-fragment": src,
+    "data-zogan-protocol": ZOGAN_PROTOCOL_VERSION,
     "data-zogan-trigger": trigger,
   };
   return h(tag, attributes, children);

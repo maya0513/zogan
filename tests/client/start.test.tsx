@@ -1,49 +1,45 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { __resetFragments } from "../../src/client/fragments";
-import { __resetIslands } from "../../src/client/islands";
-import { __resetStart, start } from "../../src/client/start";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import { start } from "../../src/client/start";
 
-const htmlResponse = (body: string) =>
-  new Response(body, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-
-beforeEach(() => {
-  __resetStart();
-  __resetFragments();
-  __resetIslands();
-  document.body.replaceChildren();
-});
+const island = (id: string, body = "<button>ready</button>") =>
+  `<div data-zogan-island="${id}" data-zogan-mode="hydrate" data-zogan-protocol="1" ` +
+  `data-zogan-trigger="load" data-zogan-props="{}">${body}</div>`;
 
 afterEach(() => {
+  document.body.replaceChildren();
   vi.restoreAllMocks();
-  vi.unstubAllGlobals();
 });
 
 describe("start", () => {
-  test("scans fragments and islands without intercepting navigation or forms", async () => {
+  test("owns only Islands below the supplied root", async () => {
     document.body.innerHTML =
-      '<div data-zogan-fragment="/fragments/header" data-zogan-trigger="load">fallback</div>' +
-      '<div data-zogan-island="Button" data-zogan-mode="hydrate" data-zogan-trigger="load" data-zogan-props="{}"><button type="button">ready</button></div>';
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => htmlResponse("<span>fresh</span>")),
-    );
-    const documentListeners = vi.spyOn(document, "addEventListener");
-    const windowListeners = vi.spyOn(window, "addEventListener");
+      `<section id="one">${island("One")}</section>` +
+      `<section id="two">${island("Two")}</section>`;
+    const one = document.querySelector("#one")!;
+    const oneLoader = vi.fn(async () => ({ default: () => <button type="button">one</button> }));
+    const twoLoader = vi.fn(async () => ({ default: () => <button type="button">two</button> }));
 
-    start({
-      islands: { Button: async () => ({ default: () => <button type="button">ready</button> }) },
-    });
+    const runtime = start({ root: one, islands: { One: oneLoader, Two: twoLoader } });
 
-    await vi.waitFor(() => expect(document.body.textContent).toBe("freshready"));
-    expect(documentListeners.mock.calls.map(([type]) => type)).not.toContain("click");
-    expect(documentListeners.mock.calls.map(([type]) => type)).not.toContain("submit");
-    expect(windowListeners.mock.calls.map(([type]) => type)).not.toContain("popstate");
+    await vi.waitFor(() => expect(one.textContent).toBe("one"));
+    expect(twoLoader).not.toHaveBeenCalled();
+    expect(document.querySelector("#two")?.textContent).toBe("ready");
+    runtime.dispose();
+    expect(one.textContent).toBe("ready");
+    runtime.dispose();
   });
 
-  test("islands are optional and a second start is ignored", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    start();
-    start();
-    expect(warn).toHaveBeenCalledOnce();
+  test("does not scan or fetch Fragment markers", () => {
+    document.body.innerHTML =
+      '<div data-zogan-fragment="/fragment" data-zogan-protocol="1" data-zogan-trigger="load">fallback</div>';
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const runtime = start();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(document.body.textContent).toBe("fallback");
+    runtime.dispose();
+    vi.unstubAllGlobals();
   });
 });

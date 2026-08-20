@@ -1,5 +1,4 @@
 export type ActivationTrigger = "load" | "idle" | "visible" | `media:${string}`;
-export type FragmentTrigger = ActivationTrigger | "manual";
 
 type IdleGlobal = typeof globalThis & {
   requestIdleCallback?: (callback: () => void) => number;
@@ -9,24 +8,22 @@ type IdleGlobal = typeof globalThis & {
 const noop = (): void => {};
 
 /** Validate the complete trigger grammar before any browser work is scheduled. */
-export const isActivationTrigger = (trigger: string, manualAllowed: boolean): boolean =>
+export const isActivationTrigger = (trigger: string): boolean =>
   trigger === "load" ||
   trigger === "idle" ||
   trigger === "visible" ||
-  (manualAllowed && trigger === "manual") ||
   (trigger.startsWith("media:") && trigger.slice("media:".length).trim() !== "");
 
 /**
  * Schedule one activation and return its cancellation function when work is pending.
- * Immediate and manual triggers return null.
+ * Immediate triggers return null.
  */
 export const scheduleTrigger = (
   element: Element,
   trigger: string,
-  manualAllowed: boolean,
   activate: () => void,
 ): (() => void) | null => {
-  if (!isActivationTrigger(trigger, manualAllowed)) {
+  if (!isActivationTrigger(trigger)) {
     console.warn(`zogan: invalid activation trigger ${JSON.stringify(trigger)}; keeping fallback`);
     return null;
   }
@@ -34,8 +31,6 @@ export const scheduleTrigger = (
     activate();
     return null;
   }
-  if (trigger === "manual" && manualAllowed) return null;
-
   let active = true;
   let cleanup = noop;
   const fire = (): void => {

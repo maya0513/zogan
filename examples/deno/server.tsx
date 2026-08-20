@@ -1,14 +1,7 @@
 import { Hono } from "hono";
 import type { ComponentChildren } from "preact";
-import {
-  createZogan,
-  defineClientIsland,
-  defineIsland,
-  FragmentSlot,
-  Island,
-  publicCache,
-} from "zogan";
-import type { PageStatusProps, RefreshClockProps } from "./src/island-props.ts";
+import { createZogan, defineIsland, FragmentSlot, Island, publicCache } from "zogan";
+import type { PageStatusProps } from "./src/island-props.ts";
 import PageStatus from "./src/islands/PageStatus.tsx";
 
 type DenoRuntime = {
@@ -40,15 +33,6 @@ const pageStatus = defineIsland<PageStatusProps>({
   id: "PageStatus",
   component: PageStatus,
 });
-const refreshClock = defineClientIsland<RefreshClockProps>({
-  id: "RefreshClock",
-  fallback: () => (
-    <button type="button" disabled>
-      Refresh server time
-    </button>
-  ),
-});
-
 const app = new Hono();
 
 const staticAsset = /^([A-Za-z0-9_.-]+)\.(js|css)$/;
@@ -92,10 +76,9 @@ app.get("/", (c) => {
       <section>
         <h2>Fragment</h2>
         <div class="row">
-          <FragmentSlot src="/fragments/clock" trigger="manual">
-            <time>Waiting for a refresh</time>
+          <FragmentSlot src="/fragments/clock" trigger="load">
+            <time>Server time unavailable</time>
           </FragmentSlot>
-          <Island of={refreshClock} props={{ src: "/fragments/clock" }} trigger="load" />
         </div>
       </section>
     </main>,

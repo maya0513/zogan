@@ -5,12 +5,11 @@ describe("zogan/client を DOM の無い環境で評価する", () => {
     expect(typeof globalThis.document).toBe("undefined");
     const client = await import("../../src/client/index");
     // oxlint-disable-next-line unicorn/no-array-sort -- Object.keys() is already a fresh array
-    expect(Object.keys(client).sort()).toEqual(["refreshFragment", "start"]);
+    expect(Object.keys(client).sort()).toEqual(["start"]);
   });
 
   test("明示的に start するまでは browser side effect を起こさない", async () => {
     const client = await import("../../src/client/index");
     expect(typeof client.start).toBe("function");
-    expect(typeof client.refreshFragment).toBe("function");
   });
 });

@@ -55,10 +55,13 @@ try {
     symlinkSync(target, destination, "dir");
   }
 
-  const [serverEntry, clientEntry, viteEntry] = await Promise.all(
-    ["dist/server/index.js", "dist/client/index.js", "dist/vite/index.mjs"].map(
-      (entry) => import(pathToFileURL(join(packageRoot, entry)).href),
-    ),
+  const [serverEntry, clientEntry, fragmentsEntry, viteEntry] = await Promise.all(
+    [
+      "dist/server/index.js",
+      "dist/client/index.js",
+      "dist/fragments/index.js",
+      "dist/vite/index.mjs",
+    ].map((entry) => import(pathToFileURL(join(packageRoot, entry)).href)),
   );
   assertExports("zogan", serverEntry, [
     "FragmentSlot",
@@ -70,11 +73,13 @@ try {
     "privateNoStore",
     "publicCache",
   ]);
-  assertExports("zogan/client", clientEntry, ["refreshFragment", "start"]);
+  assertExports("zogan/client", clientEntry, ["start"]);
+  assertExports("zogan/fragments", fragmentsEntry, ["startFragments"]);
   assertExports("zogan/vite", viteEntry, ["default", "zoganVite"]);
   for (const entry of [
     "dist/server/index.d.ts",
     "dist/client/index.d.ts",
+    "dist/fragments/index.d.ts",
     "dist/vite/index.d.mts",
   ]) {
     if (!existsSync(join(packageRoot, entry)))
@@ -87,11 +92,12 @@ try {
     smoke,
     [
       'import { cachePolicy, createZogan, defineClientIsland, defineIsland, FragmentSlot, Island, privateNoStore, publicCache, type CachePolicy, type IslandDescriptor, type ZoganOptions } from "zogan";',
-      'import { refreshFragment, start } from "zogan/client";',
+      'import { start } from "zogan/client";',
+      'import { startFragments } from "zogan/fragments";',
       'import { zoganVite, type ZoganPluginOptions } from "zogan/vite";',
       "type Types = [CachePolicy, IslandDescriptor, ZoganOptions, ZoganPluginOptions];",
       "void (null as unknown as Types);",
-      "void [cachePolicy, createZogan, defineClientIsland, defineIsland, FragmentSlot, Island, privateNoStore, publicCache, refreshFragment, start, zoganVite];",
+      "void [cachePolicy, createZogan, defineClientIsland, defineIsland, FragmentSlot, Island, privateNoStore, publicCache, start, startFragments, zoganVite];",
     ].join("\n"),
   );
   run("pnpm", [

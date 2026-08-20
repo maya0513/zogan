@@ -18,7 +18,7 @@ Fragment は HTTP を使う remote include であり、契約がゼロになる�
 | [03-cache-policy.md](03-cache-policy.md) | 明示的な `CachePolicy` |
 | [04-fragment.md](04-fragment.md) | `FragmentSlot` と HTML endpoint |
 | [05-island.md](05-island.md) | 型付きdescriptorとlazy Island |
-| [06-client-runtime.md](06-client-runtime.md) | `start` と `refreshFragment` |
+| [06-client-runtime.md](06-client-runtime.md) | 分離したIsland/Fragment runtimeとlifecycle |
 | [07-failure-modes.md](07-failure-modes.md) | fail-closed動作と残る弱点 |
 | [08-acceptance.md](08-acceptance.md) | テスト項目と品質ゲート |
 | [09-references.md](09-references.md) | 系譜、差分、採用しなかった設計 |
@@ -35,10 +35,10 @@ Fragment は HTTP を使う remote include であり、契約がゼロになる�
 4. **キャッシュは呼び出しごとに明示する。** ページとFragmentの応答生成に、opaqueな `CachePolicy` が必須である。
 5. **失敗してもserver fallbackを残す。** 検証、通信、module load、activateに失敗した領域を空にしない。
 6. **Island codeは必要になるまで読み込まない。** client entryはIDごとのdynamic import loaderを持つ。
-7. **server/client境界をbuildで検査する。** 明示したclient-only moduleがSSR entryから到達可能ならbuildを失敗させる。
+7. **server/client境界をbuildで検査する。** client-onlyのserver到達とserver-onlyのclient到達を失敗させる。
 
 ## 正本
 
-公開契約の最終的な正本は、`src/server/index.ts`、`src/client/index.ts`、`src/vite/index.ts` と、それらを固定するテストである。この仕様はその実装を説明する。文書と実装が矛盾した場合は、実装とテストを確認し、同じ変更で文書も直す。
+公開契約の最終的な正本は、`src/server/index.ts`、`src/client/index.ts`、`src/fragments/index.ts`、`src/vite/index.ts` と、それらを固定するテストである。この仕様はその実装を説明する。文書と実装が矛盾した場合は、実装とテストを確認し、同じ変更で文書も直す。
 
 内部scanner、registry、module graph helper、test reset hookは公開APIではない。付録にも公開機能として記載しない。

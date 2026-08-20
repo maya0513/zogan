@@ -148,6 +148,36 @@ describe("client-only のサーバ到達境界", () => {
   });
 });
 
+describe("server-only のクライアント到達境界", () => {
+  test("'use server-only' へ client entry から到達すると失敗する", () => {
+    const graph = {
+      "src/client/entry.ts": { isEntry: true, imports: ["src/islands/Account.tsx"] },
+      "src/islands/Account.tsx": { imports: ["src/server/database.ts"] },
+      "src/server/database.ts": {},
+    };
+    const plugin = zoganVite();
+    const ctx = context(graph, "client");
+    call(plugin, "transform", ctx, "'use server-only'", "src/server/database.ts");
+
+    expect(() => call(plugin, "buildEnd", ctx, undefined)).toThrow(
+      /server-only module reached from client bundle/,
+    );
+  });
+
+  test("options.serverOnly の明示 glob も検査する", () => {
+    const plugin = zoganVite({ serverOnly: ["**/database/**"] });
+    const ctx = context(
+      {
+        "src/client.ts": { isEntry: true, imports: ["src/database/query.ts"] },
+        "src/database/query.ts": {},
+      },
+      "client",
+    );
+    call(plugin, "transform", ctx, "export const query = 1", "src/database/query.ts");
+    expect(() => call(plugin, "buildEnd", ctx, undefined)).toThrow(/server-only/);
+  });
+});
+
 describe("Island の lazy client entry", () => {
   test("islandsDir 直下の *.tsx stem を ID として loader map を生成する", () => {
     const dir = mkdtempSync(join(tmpdir(), "zogan-islands-"));
@@ -164,13 +194,13 @@ describe("Island の lazy client entry", () => {
     expect(code).toContain(`CartBadge: () => import(${JSON.stringify(modules[0]!.file)})`);
     expect(code).toContain(`ProductGallery: () => import(${JSON.stringify(modules[1]!.file)})`);
     expect(code).not.toMatch(/import\s+CartBadge\s+from/);
-    expect(code).toContain("start({ islands })");
+    expect(code).toContain("export const runtime = start({ islands })");
   });
 
   test("Island が 0 件でも空 loader map で start する", () => {
     const code = generateIslandsEntry([]);
     expect(code).toContain("export const islands = {");
-    expect(code).toContain("start({ islands })");
+    expect(code).toContain("export const runtime = start({ islands })");
     expect(code).not.toContain("=> import(");
   });
 
@@ -198,7 +228,7 @@ describe("Island の lazy client entry", () => {
     const ctx = context({});
     expect(call(plugin, "resolveId", ctx, "virtual:zogan/islands")).toBe("\0virtual:zogan/islands");
     const code = call(plugin, "load", ctx, "\0virtual:zogan/islands") as string;
-    expect(code).toContain("start({ islands })");
+    expect(code).toContain("export const runtime = start({ islands })");
     expect(code).not.toContain("=> import(");
   });
 

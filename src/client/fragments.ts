@@ -1,114 +1,40 @@
+import { isFragmentElement, type FragmentElement } from "../shared/fragment-elements.ts";
+import { ZOGAN_PROTOCOL_VERSION } from "../shared/protocol.ts";
 import { collect, hasOnlyZoganAttributes, isHtmlElement, parseHTMLFragment } from "./dom.ts";
-import { disposeIslandsIn, hydrateIslands } from "./islands.ts";
 import { fragmentUrl, isHtmlContentType, isManualRedirect } from "./protocol.ts";
 import { isActivationTrigger, scheduleTrigger } from "./triggers.ts";
-import { isFragmentElement, type FragmentElement } from "../shared/fragment-elements.ts";
 
 const FRAGMENT_SELECTOR = "[data-zogan-fragment]";
-const ISLAND_SELECTOR = "[data-zogan-island]";
-const FRAGMENT_ATTRIBUTES = new Set(["data-zogan-fragment", "data-zogan-trigger"]);
+const OWNED_SELECTOR = "[data-zogan-fragment], [data-zogan-island]";
+const FRAGMENT_ATTRIBUTES = new Set([
+  "data-zogan-fragment",
+  "data-zogan-protocol",
+  "data-zogan-trigger",
+]);
 
-const inFlight = new Map<string, Promise<string | null>>();
-const claimed = new WeakSet<Element>();
-const generations = new WeakMap<Element, symbol>();
-const pendingTriggers = new Map<Element, () => void>();
+/** Local lifecycle for one non-overlapping Fragment root. */
+export interface FragmentRuntime {
+  scan(nodes: readonly Node[]): void;
+  dispose(nodes: readonly Node[], restoreFallback?: boolean): void;
+  destroy(nodes?: readonly Node[]): void;
+}
 
-/** Fetch trusted same-origin HTML. Concurrent requests for the same URL share only in-flight work. */
-export const fetchFragment = async (src: string): Promise<string | null> => {
-  const target = fragmentUrl(src);
-  if (target === null) {
-    console.warn(
-      `zogan: refusing fragment URL ${JSON.stringify(src)}; expected a root-relative same-origin URL without a hash`,
-    );
-    return null;
-  }
+/** Browser options for the opt-in read-only Fragment runtime. */
+export interface StartFragmentsOptions {
+  /** Non-overlapping DOM root owned by this runtime. Defaults to the document element. */
+  readonly root?: Element;
+}
 
-  const existing = inFlight.get(target.href);
-  if (existing !== undefined) return existing;
+/** Handle for cancelling pending work and restoring initial server fallbacks. */
+export interface FragmentClientRuntime {
+  dispose(): void;
+}
 
-  const request = (async (): Promise<string | null> => {
-    try {
-      const response = await fetch(target.href, {
-        credentials: "same-origin",
-        redirect: "manual",
-        headers: { Accept: "text/html" },
-      });
-      if (isManualRedirect(response) || !response.ok) {
-        console.warn(
-          `zogan: fragment ${JSON.stringify(src)} responded with ${response.status}; keeping fallback`,
-        );
-        return null;
-      }
-      if (!isHtmlContentType(response.headers.get("Content-Type"))) {
-        console.warn(
-          `zogan: fragment ${JSON.stringify(src)} did not return HTML; keeping fallback`,
-        );
-        return null;
-      }
-      return await response.text();
-    } catch (error) {
-      console.warn(
-        `zogan: fragment ${JSON.stringify(src)} failed to load; keeping fallback`,
-        error,
-      );
-      return null;
-    }
-  })();
-
-  inFlight.set(target.href, request);
-  try {
-    return await request;
-  } finally {
-    if (inFlight.get(target.href) === request) inFlight.delete(target.href);
-  }
-};
-
-const applyFragmentHtml = (element: Element, html: string, contextTag: FragmentElement): void => {
-  const inserted = parseHTMLFragment(html, contextTag);
-  const removed = [...element.childNodes];
-
-  disposeFragmentsIn(removed);
-  disposeIslandsIn(removed);
-  element.replaceChildren(...inserted);
-
-  scanFragments(inserted);
-  hydrateIslands(inserted);
-};
-
-const updateOne = async (
-  element: Element,
-  descriptor: FragmentDescriptor,
-  token: symbol,
-): Promise<void> => {
-  const html = await fetchFragment(descriptor.src);
-  if (html === null) return;
-  if (generations.get(element) !== token || !element.isConnected) return;
-  if (hasIslandOwner(element)) {
-    console.warn("zogan: FragmentSlot cannot be nested inside an Island; keeping fallback");
-    return;
-  }
-  if (hasFragmentSourceAncestor(element, descriptor.src)) return;
-  if (!matchesFragmentDescriptor(element, descriptor)) return;
-  applyFragmentHtml(element, html, descriptor.contextTag);
-};
-
-const activateFragment = (element: Element, descriptor: FragmentDescriptor): Promise<void> => {
-  if (hasIslandOwner(element)) {
-    console.warn("zogan: FragmentSlot cannot be nested inside an Island; keeping fallback");
-    return Promise.resolve();
-  }
-  if (hasFragmentSourceAncestor(element, descriptor.src)) return Promise.resolve();
-  if (!matchesFragmentDescriptor(element, descriptor)) return Promise.resolve();
-  const token = Symbol("zogan.fragment.activation");
-  generations.set(element, token);
-  return updateOne(element, descriptor, token);
-};
-
-function hasIslandOwner(element: Element): boolean {
-  return (
-    element.matches(ISLAND_SELECTOR) ||
-    (element.parentElement?.closest(ISLAND_SELECTOR) ?? null) !== null
-  );
+interface FragmentDescriptor {
+  readonly contextTag: FragmentElement;
+  readonly src: string;
+  readonly trigger: string;
+  readonly url: string;
 }
 
 const fragmentContext = (element: Element): FragmentElement | null => {
@@ -124,39 +50,36 @@ const fragmentContext = (element: Element): FragmentElement | null => {
   return null;
 };
 
-interface FragmentDescriptor {
-  readonly contextTag: FragmentElement;
-  readonly src: string;
-  readonly trigger: string;
-}
-
 const readFragmentDescriptor = (element: Element): FragmentDescriptor | null => {
   if (!hasOnlyZoganAttributes(element, FRAGMENT_ATTRIBUTES)) {
+    console.warn("zogan: FragmentSlot has an unknown zogan marker; keeping fallback");
+    return null;
+  }
+  const protocol = element.getAttribute("data-zogan-protocol");
+  if (protocol !== ZOGAN_PROTOCOL_VERSION) {
     console.warn(
-      "zogan: FragmentSlot has an unknown or overlapping zogan marker; keeping fallback",
+      `zogan: unsupported fragment protocol ${JSON.stringify(protocol)}; keeping fallback`,
     );
     return null;
   }
   const contextTag = fragmentContext(element);
   if (contextTag === null) return null;
-
-  const src = element.getAttribute("data-zogan-fragment");
-  if (src === null || fragmentUrl(src) === null) {
+  // The selector that reached this reader guarantees the attribute is present;
+  // an empty value remains invalid through fragmentUrl().
+  const src = element.getAttribute("data-zogan-fragment") ?? "";
+  const url = fragmentUrl(src);
+  if (url === null) {
     console.warn(
       `zogan: refusing fragment URL ${JSON.stringify(src)}; expected a root-relative same-origin URL without a hash`,
     );
     return null;
   }
   const trigger = element.getAttribute("data-zogan-trigger");
-  if (trigger === null) {
-    console.warn("zogan: FragmentSlot is missing its activation trigger; keeping fallback");
-    return null;
-  }
-  if (!isActivationTrigger(trigger, true)) {
+  if (trigger === null || !isActivationTrigger(trigger)) {
     console.warn(`zogan: invalid activation trigger ${JSON.stringify(trigger)}; keeping fallback`);
     return null;
   }
-  return { contextTag, src, trigger };
+  return { contextTag, src, trigger, url: url.href };
 };
 
 const matchesFragmentDescriptor = (element: Element, expected: FragmentDescriptor): boolean => {
@@ -175,107 +98,177 @@ const matchesFragmentDescriptor = (element: Element, expected: FragmentDescripto
   return false;
 };
 
-const hasFragmentSourceAncestor = (element: Element, src: string): boolean => {
-  const target = fragmentUrl(src);
-  /* v8 ignore next -- every caller passes a descriptor already validated by readFragmentDescriptor */
-  if (target === null) return true;
-
-  let ancestor = element.parentElement?.closest(FRAGMENT_SELECTOR) ?? null;
-  while (ancestor !== null) {
-    const ancestorSrc = ancestor.getAttribute("data-zogan-fragment");
-    /* v8 ignore next -- closest(FRAGMENT_SELECTOR) guarantees the attribute during this sync turn */
-    if (ancestorSrc === null) return false;
-    const ancestorTarget = fragmentUrl(ancestorSrc);
-    if (ancestorTarget?.href === target.href) {
-      console.warn(
-        `zogan: fragment ${JSON.stringify(src)} would create an ancestor source cycle; keeping fallback`,
-      );
-      return true;
-    }
-    ancestor = ancestor.parentElement?.closest(FRAGMENT_SELECTOR) ?? null;
-  }
-  return false;
-};
-
-/** Scan supplied nodes for FragmentSlot markers without observing unrelated DOM mutations. */
-export const scanFragments = (nodes: readonly Node[]): void => {
-  for (const element of collect(nodes, FRAGMENT_SELECTOR)) {
-    if (claimed.has(element)) continue;
-    if (hasIslandOwner(element)) {
-      console.warn("zogan: FragmentSlot cannot be nested inside an Island; keeping fallback");
-      continue;
-    }
-    const descriptor = readFragmentDescriptor(element);
-    if (descriptor === null) continue;
-    if (hasFragmentSourceAncestor(element, descriptor.src)) continue;
-    claimed.add(element);
-    const cleanup = scheduleTrigger(element, descriptor.trigger, true, () => {
-      pendingTriggers.delete(element);
-      void activateFragment(element, descriptor);
-    });
-    if (cleanup !== null) pendingTriggers.set(element, cleanup);
-  }
-};
-
-/** Cancel pending work below nodes which are about to leave the document. */
-export const disposeFragmentsIn = (nodes: readonly Node[]): void => {
-  for (const element of collect(nodes, FRAGMENT_SELECTOR)) {
-    generations.set(element, Symbol("zogan.fragment.disposed"));
-    const cleanup = pendingTriggers.get(element);
-    if (cleanup !== undefined) {
-      pendingTriggers.delete(element);
-      cleanup();
-    }
-    claimed.delete(element);
-  }
-};
-
-const fragmentTargets = (src: string): Element[] =>
-  [...document.querySelectorAll(FRAGMENT_SELECTOR)].filter(
-    (element) => element.getAttribute("data-zogan-fragment") === src,
+const containsReservedMarker = (nodes: readonly Node[]): boolean =>
+  collect(nodes, "*").some((element) =>
+    [...element.attributes].some((attribute) =>
+      attribute.name.toLowerCase().startsWith("data-zogan-"),
+    ),
   );
 
-/** Explicitly reload all connected FragmentSlots whose source exactly matches `src`. */
-export const refreshFragment = async (src: string): Promise<void> => {
-  const targets = fragmentTargets(src);
-  if (targets.length === 0) {
-    console.warn(`zogan: no FragmentSlot targets found for ${JSON.stringify(src)}; nothing to do`);
-    return;
+const requestFragment = async (src: string): Promise<string | null> => {
+  const target = fragmentUrl(src);
+  if (target === null) {
+    console.warn(
+      `zogan: refusing fragment URL ${JSON.stringify(src)}; expected a root-relative same-origin URL without a hash`,
+    );
+    return null;
   }
-
-  const work: { element: Element; token: symbol; descriptor: FragmentDescriptor }[] = [];
-  for (const element of targets) {
-    if (hasIslandOwner(element)) {
-      console.warn("zogan: FragmentSlot cannot be nested inside an Island; keeping fallback");
-      continue;
+  try {
+    const response = await fetch(target.href, {
+      credentials: "same-origin",
+      redirect: "manual",
+      headers: { Accept: "text/html" },
+    });
+    if (isManualRedirect(response) || !response.ok) {
+      console.warn(
+        `zogan: fragment ${JSON.stringify(src)} responded with ${response.status}; keeping fallback`,
+      );
+      return null;
     }
-    const descriptor = readFragmentDescriptor(element);
-    if (descriptor === null || descriptor.src !== src) continue;
-    if (hasFragmentSourceAncestor(element, descriptor.src)) continue;
-    const token = Symbol("zogan.fragment.refresh");
-    generations.set(element, token);
-    work.push({ descriptor, element, token });
-  }
-  if (work.length === 0) return;
-  const html = await fetchFragment(src);
-  if (html === null) return;
-
-  for (const { descriptor, element, token } of work) {
-    if (generations.get(element) !== token || !element.isConnected) continue;
-    if (hasIslandOwner(element)) {
-      console.warn("zogan: FragmentSlot cannot be nested inside an Island; keeping fallback");
-      continue;
+    if (!isHtmlContentType(response.headers.get("Content-Type"))) {
+      console.warn(`zogan: fragment ${JSON.stringify(src)} did not return HTML; keeping fallback`);
+      return null;
     }
-    if (hasFragmentSourceAncestor(element, descriptor.src)) continue;
-    if (!matchesFragmentDescriptor(element, descriptor)) continue;
-    applyFragmentHtml(element, html, descriptor.contextTag);
+    return await response.text();
+  } catch (error) {
+    console.warn(`zogan: fragment ${JSON.stringify(src)} failed to load; keeping fallback`, error);
+    return null;
   }
 };
 
-/** Reset module state between isolated tests. */
+/** Fetch one trusted, same-origin Fragment response without retaining it. */
+export const fetchFragment = (src: string): Promise<string | null> => requestFragment(src);
+
+/** Create a one-shot Fragment loader isolated from every other root. */
+export const createFragmentRuntime = (): FragmentRuntime => {
+  const inFlight = new Map<string, Promise<string | null>>();
+  const claimed = new WeakSet<Element>();
+  const generations = new WeakMap<Element, symbol>();
+  const fallbacks = new WeakMap<Element, readonly Node[]>();
+  const pendingTriggers = new Map<Element, () => void>();
+  let destroyed = false;
+  const isDestroyed = (): boolean => destroyed;
+
+  const fetchShared = (src: string, url: string): Promise<string | null> => {
+    const existing = inFlight.get(url);
+    if (existing !== undefined) return existing;
+    const request = requestFragment(src);
+    inFlight.set(url, request);
+    void request.finally(() => {
+      if (inFlight.get(url) === request) inFlight.delete(url);
+    });
+    return request;
+  };
+
+  const apply = (element: Element, html: string, contextTag: FragmentElement): boolean => {
+    const inserted = parseHTMLFragment(html, contextTag);
+    if (containsReservedMarker(inserted)) {
+      console.warn("zogan: Fragment responses cannot contain reserved zogan markers");
+      return false;
+    }
+    fallbacks.set(
+      element,
+      [...element.childNodes].map((node) => node.cloneNode(true)),
+    );
+    element.replaceChildren(...inserted);
+    return true;
+  };
+
+  const activate = async (element: Element, descriptor: FragmentDescriptor): Promise<void> => {
+    if (!matchesFragmentDescriptor(element, descriptor)) return;
+    const token = Symbol("zogan.fragment.activation");
+    generations.set(element, token);
+    const html = await fetchShared(descriptor.src, descriptor.url);
+    if (
+      isDestroyed() ||
+      html === null ||
+      generations.get(element) !== token ||
+      !element.isConnected ||
+      !matchesFragmentDescriptor(element, descriptor)
+    ) {
+      return;
+    }
+    apply(element, html, descriptor.contextTag);
+  };
+
+  const scan = (nodes: readonly Node[]): void => {
+    if (destroyed) return;
+    for (const element of collect(nodes, FRAGMENT_SELECTOR)) {
+      if (claimed.has(element)) continue;
+      if ((element.parentElement?.closest(OWNED_SELECTOR) ?? null) !== null) {
+        console.warn(
+          "zogan: nested Fragment or Island ownership is not supported; keeping fallback",
+        );
+        continue;
+      }
+      const descriptor = readFragmentDescriptor(element);
+      if (descriptor === null) continue;
+      claimed.add(element);
+      const cleanup = scheduleTrigger(element, descriptor.trigger, () => {
+        pendingTriggers.delete(element);
+        void activate(element, descriptor);
+      });
+      if (cleanup !== null) pendingTriggers.set(element, cleanup);
+    }
+  };
+
+  const dispose = (nodes: readonly Node[], restoreFallback = false): void => {
+    for (const element of collect(nodes, FRAGMENT_SELECTOR)) {
+      generations.set(element, Symbol("zogan.fragment.disposed"));
+      const cleanup = pendingTriggers.get(element);
+      if (cleanup !== undefined) {
+        pendingTriggers.delete(element);
+        cleanup();
+      }
+      const fallback = fallbacks.get(element);
+      if (restoreFallback && fallback !== undefined) {
+        element.replaceChildren(...fallback.map((node) => node.cloneNode(true)));
+      }
+      fallbacks.delete(element);
+      claimed.delete(element);
+    }
+  };
+
+  const destroy = (nodes: readonly Node[] = []): void => {
+    if (destroyed) return;
+    destroyed = true;
+    dispose(nodes, true);
+    for (const cleanup of pendingTriggers.values()) cleanup();
+    pendingTriggers.clear();
+    inFlight.clear();
+  };
+
+  return Object.freeze({ destroy, dispose, scan });
+};
+
+/** Start the opt-in read-only Fragment runtime below one explicit root. */
+export const startFragments = (options: StartFragmentsOptions = {}): FragmentClientRuntime => {
+  const root = options.root ?? document.documentElement;
+  const runtime = createFragmentRuntime();
+  runtime.scan([root]);
+  let active = true;
+  return Object.freeze({
+    dispose(): void {
+      if (!active) return;
+      active = false;
+      runtime.destroy([root]);
+    },
+  });
+};
+
+// Compatibility helpers for internal tests and benchmarks. Public consumers use startFragments().
+let testRuntime = createFragmentRuntime();
+
+export const scanFragments = (nodes: readonly Node[]): void => {
+  testRuntime.scan(nodes);
+};
+
+export const disposeFragmentsIn = (nodes: readonly Node[]): void => {
+  testRuntime.dispose(nodes);
+};
+
 // oxlint-disable-next-line no-underscore-dangle -- deliberately recognizable test-only hook
 export const __resetFragments = (): void => {
-  for (const cleanup of pendingTriggers.values()) cleanup();
-  pendingTriggers.clear();
-  inFlight.clear();
+  testRuntime.destroy();
+  testRuntime = createFragmentRuntime();
 };

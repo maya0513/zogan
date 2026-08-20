@@ -1,6 +1,6 @@
 import { h } from "preact";
 import { afterAll, beforeAll, bench, describe } from "vitest";
-import { __resetFragments, refreshFragment } from "../src/client/fragments";
+import { createFragmentRuntime } from "../src/client/fragments";
 import {
   __resetIslands,
   disposeIslandsIn,
@@ -12,15 +12,15 @@ const fragmentSource = "/fragments/badge";
 const fragmentHtml = "<span>Fresh fragment</span>";
 const originalFetch = globalThis.fetch;
 
-const fragmentSlots = Array.from(
-  { length: 100 },
-  (_, index) =>
-    `<div data-zogan-fragment="${index < 75 ? fragmentSource : "/fragments/other"}" data-zogan-trigger="manual"><span>Fallback</span></div>`,
+const fragmentSlots = Array.from({ length: 100 }, (_, index) =>
+  index < 75
+    ? `<div data-zogan-fragment="${fragmentSource}" data-zogan-protocol="1" data-zogan-trigger="load"><span>Fallback</span></div>`
+    : "<div>Static node</div>",
 ).join("");
 
 const islandNodes = Array.from({ length: 100 }, (_, index) =>
   index < 75
-    ? '<div data-zogan-island="BenchIsland" data-zogan-mode="mount" data-zogan-trigger="load" data-zogan-props="{&quot;label&quot;:&quot;Ready&quot;}"><span>Waiting</span></div>'
+    ? '<div data-zogan-island="BenchIsland" data-zogan-mode="mount" data-zogan-protocol="1" data-zogan-trigger="load" data-zogan-props="{&quot;label&quot;:&quot;Ready&quot;}"><span>Waiting</span></div>'
     : "<div>Static node</div>",
 ).join("");
 
@@ -36,14 +36,19 @@ beforeAll(() => {
 
 afterAll(() => {
   disposeIslandsIn([document.body]);
-  __resetFragments();
   __resetIslands();
   globalThis.fetch = originalFetch;
 });
 
 describe("client enhancement paths", () => {
   bench("FragmentSlot fan-out/DOM replace: 75 of 100 slots", async () => {
-    await refreshFragment(fragmentSource);
+    document.body.innerHTML = fragmentSlots;
+    const runtime = createFragmentRuntime();
+    runtime.scan([document.body]);
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    runtime.destroy([document.body]);
   });
 
   bench("Lazy Island discovery/loader: 75 of 100 nodes", async () => {

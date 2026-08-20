@@ -6,12 +6,12 @@ zogan は次の3境界だけを提供する。
 
 1. Hono `Context` とPreact `VNode` から、cache policy付きのpageまたはFragment responseを作る。
 2. server HTMLへ `FragmentSlot` と型付き `Island` markerを出力する。
-3. browserで明示markerだけをscanし、Fragment取得とIsland起動を行う。
+3. browserでopt-inしたruntimeごとに明示markerだけをscanし、one-shot Fragment取得またはIsland起動を行う。
 
 Vite integrationを使う場合は、さらに次を提供する。
 
 - `islandsDir` 直下の `*.tsx` をID別dynamic importへ変換するclient entry
-- 明示したclient-only moduleがSSR entryから到達する事故のbuild-time診断
+- client-onlyのSSR到達とserver-onlyのclient到達に対するbuild-time診断
 
 ## 1.2 提供しないもの
 
@@ -25,6 +25,7 @@ Vite integrationを使う場合は、さらに次を提供する。
 - HTML sanitization
 - polling、prefetch、streaming、push更新
 - nested Island ownership
+- Fragment response内のFragment／Island境界
 - arbitrary SVG/MathML/template/custom-element contextへのFragment挿入
 
 必要なbusiness stateはアプリが通常のserver route、Cookie、database、Island内部stateとして所有する。zogan module scopeへrequest固有値を置かない。
@@ -39,7 +40,7 @@ Vite integrationを使う場合は、さらに次を提供する。
 | public pageからユーザ固有値を除く | cache leakageはHTML生成時のデータ選択で決まる |
 | Fragment responseをtrusted same-origin HTMLに限定する | client runtimeはsanitizerではない |
 | link/formのnative経路を完成させる | JavaScriptがなくても操作可能にするため |
-| mutation後に必要なら `refreshFragment()` を呼ぶ | zoganはapplication eventを推測しない |
+| mutation後に必要なら完全Pageへ遷移する | Fragment runtimeはapplication stateを同期しない |
 | Island ID、filename、props schemaをdeploy間で管理する | runtimeにprotocol negotiationはない |
 
 ## 1.4 前提環境

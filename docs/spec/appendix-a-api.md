@@ -55,7 +55,7 @@ raw escape hatchは、HTAB、visible ASCII、obs-text以外のHTTP field-value�
 ### Fragment
 
 ```ts
-type FragmentTrigger = "load" | "idle" | "visible" | "manual" | `media:${string}`;
+type FragmentTrigger = "load" | "idle" | "visible" | `media:${string}`;
 
 type FragmentElement =
   | "a" | "abbr" | "address" | "article" | "aside" | "b" | "bdi" | "bdo"
@@ -141,42 +141,65 @@ type IslandLoader = () => Promise<IslandModule>;
 
 interface StartOptions {
   readonly islands?: Readonly<Record<string, IslandLoader>>;
+  readonly root?: Element;
 }
 
-declare const start: (options?: StartOptions) => void;
-declare const refreshFragment: (src: string) => Promise<void>;
+interface ClientRuntime {
+  dispose(): void;
+}
+
+declare const start: (options?: StartOptions) => ClientRuntime;
 ```
 
-fragment-only pageは`start()`を引数なしで呼べる。`start()`はdocumentごとに一度だけ呼ぶ。`refreshFragment(src)`はmarker valueが`src`と完全一致する接続中slotをすべて再取得する。
+`start()`は指定rootのIslandだけを一度scanする。rootの既定値は`document.documentElement`で、handleの`dispose()`はpending workとPreact rootを停止し、server fallbackを復元する。
 
-## A.3 `zogan/vite`
+## A.3 `zogan/fragments`
+
+```ts
+interface StartFragmentsOptions {
+  readonly root?: Element;
+}
+
+interface FragmentClientRuntime {
+  dispose(): void;
+}
+
+declare const startFragments: (options?: StartFragmentsOptions) => FragmentClientRuntime;
+```
+
+`startFragments()`は指定rootのFragmentだけを一度scanする。imperative refresh、manual trigger、挿入後の再scanは提供しない。
+
+## A.4 `zogan/vite`
 
 ```ts
 interface ZoganPluginOptions {
   clientOnly?: string[];
   islandsDir?: string;
+  serverOnly?: string[];
 }
 
 declare const zoganVite: (options?: ZoganPluginOptions) => Plugin;
 export default zoganVite;
 ```
 
-`clientOnly`の既定値は空配列、`islandsDir`の既定値は`src/islands`である。相対`islandsDir`はVite root基準、absolute pathはそのまま使う。直下の`*.tsx`だけが対象である。Vite 8はoptional peerで、pluginを使わないapplicationには不要である。
+`clientOnly`と`serverOnly`の既定値は空配列、`islandsDir`の既定値は`src/islands`である。相対`islandsDir`はVite root基準、absolute pathはそのまま使う。直下の`*.tsx`だけが対象である。Vite 8はoptional peerで、pluginを使わないapplicationには不要である。
 
 pluginは`virtual:zogan/islands`をintegration surfaceとして提供する。生成moduleは各`*.tsx`を個別のdynamic import loaderへし、`islands` mapをexportして`start({ islands })`を一度呼ぶ。
 
 ```ts
 declare module "virtual:zogan/islands" {
   export const islands: Readonly<Record<string, import("zogan/client").IslandLoader>>;
+  export const runtime: import("zogan/client").ClientRuntime;
 }
 ```
 
-## A.4 package entry
+## A.5 package entry
 
 | npm import | JSR import | Runtime value exports |
 |---|---|---|
 | `zogan` | `@maya0513/zogan` | `FragmentSlot`, `Island`, `cachePolicy`, `createZogan`, `defineClientIsland`, `defineIsland`, `privateNoStore`, `publicCache` |
-| `zogan/client` | `@maya0513/zogan/client` | `refreshFragment`, `start` |
+| `zogan/client` | `@maya0513/zogan/client` | `start` |
+| `zogan/fragments` | `@maya0513/zogan/fragments` | `startFragments` |
 | `zogan/vite` | `@maya0513/zogan/vite` | default export、`zoganVite` |
 
 scanner、registry、DOM parser、protocol guard、test reset hookは内部実装であり公開APIではない。

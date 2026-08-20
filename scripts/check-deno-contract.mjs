@@ -26,6 +26,7 @@ if (deno.deploy?.install !== "deno install --frozen --node-modules-dir=manual") 
 const expectedExports = {
   ".": "./src/server/index.ts",
   "./client": "./src/client/index.ts",
+  "./fragments": "./src/fragments/index.ts",
   "./vite": "./src/vite/index.ts",
 };
 if (JSON.stringify(deno.exports) !== JSON.stringify(expectedExports)) {

@@ -34,12 +34,13 @@ descriptorはfreezeされ、props型を保持する。IDは `^[A-Za-z][A-Za-z0-9
 
 `Island` は常に固定の `div` wrapperを出力する。`props` は省略できない。clientもmarker elementのlocal nameが`div`であることとID規則をloader lookup前に検証し、raw `span`、`template`、SVG等へ付けたmarkerや不正IDは起動しない。
 
-Island wrapperで許される予約attributeは`data-zogan-island`、`data-zogan-mode`、`data-zogan-trigger`、`data-zogan-props`だけである。それ以外の`data-zogan-*`があれば、clientはloader lookup前とasync activate前の両方で拒否する。
+Island wrapperで許される予約attributeは`data-zogan-island`、`data-zogan-mode`、`data-zogan-protocol`、`data-zogan-trigger`、`data-zogan-props`だけである。それ以外の`data-zogan-*`があれば、clientはloader lookup前とasync activate前の両方で拒否する。
 
 ```html
 <div
   data-zogan-island="Counter"
   data-zogan-mode="hydrate"
+  data-zogan-protocol="1"
   data-zogan-trigger="visible"
   data-zogan-props="{&quot;count&quot;:3}"
 >
@@ -60,7 +61,7 @@ Island wrapperで許される予約attributeは`data-zogan-island`、`data-zogan
 
 検証後に `JSON.stringify` し、Preact rendererがHTML attributeとしてescapeする。clientも `data-zogan-props` の存在、top-level object、全nested valueがfiniteなJSON値であることを再帰検証する。欠落、array/null/primitiveのtop-level、壊れたJSON、overflowして非finiteになったnumberはfallbackを残す。
 
-propsへsecretを入れるとpage HTMLへ出る。public page上のIsland propsは全ユーザへ公開可能な値だけにする。ユーザ固有propsが必要ならprivate pageまたはprivate Fragment内でIslandをrenderする。
+propsへsecretを入れるとpage HTMLへ出る。public page上のIsland propsは全ユーザへ公開可能な値だけにする。ユーザ固有propsが必要ならprivate pageでIslandをrenderする。Fragment response内にIslandは置けない。
 
 ## 5.4 trigger
 
@@ -68,7 +69,7 @@ propsへsecretを入れるとpage HTMLへ出る。public page上のIsland props�
 type IslandTrigger = "load" | "idle" | "visible" | `media:${string}`;
 ```
 
-挙動はFragmentと同じで、`manual` はIslandにはない。component propの既定は `load`で、serverはmarkerを必ず出す。raw markerでtriggerが欠落または不正、あるいは対応browser APIがなければ警告してSSR/fallbackを維持する。
+component propの既定は `load`で、serverはtrigger markerを必ず出す。raw markerでtriggerが欠落または不正、あるいは対応browser APIがなければ警告してSSR/fallbackを維持する。
 
 triggerが発火するまで、そのIDのloaderを呼ばない。`visible` やmedia queryは、初期bundleと初期実行costを局所化するための機能である。
 
@@ -120,7 +121,7 @@ start({
 
 eager componentではなく、必ず `Promise<{ default: ComponentType }>` を返すloaderである。
 
-Viteのvirtual moduleは自身で`start({ islands })`を呼ぶ。virtual moduleのimportとmanual `start()`を併用しない。最初の`start()`だけが有効で、2回目はloaderを追加せず警告して無視される。
+Viteのvirtual moduleは自身で`start({ islands })`を呼び、返されたhandleを`runtime`としてexportする。同じrootを手書きの `start()`でも所有しない。互いに重ならないrootなら別runtime instanceを開始できる。
 
 ## 5.6 activationとmemoization
 
@@ -139,15 +140,15 @@ activate前にtargetがdisposeまたはdocumentから削除された場合は結
 
 - Islandの中にIslandをnestしない。outer Preact rootがsubtreeを所有する。
 - Islandの中に `FragmentSlot` を置かない。
-- `FragmentSlot` responseの中にIslandを置くことはできる。
-- Fragment置換でIslandを削除するときは、Preact rootとpending triggerをdisposeする。
+- Fragment responseの中にIslandまたは別のFragmentを置かない。
+- application componentが作るnestはserver renderで拒否し、raw/stale markupはclientでfail closedにする。
 
 これらは「たまたま動くDOM」を許さず、subtree ownerを1つにするための制約である。
 
 ## 5.8 client-only boundary
 
-top-level browser accessやbrowser専用dependencyのためSSRで安全に評価できないmoduleは、先頭の `'use client-only'` directive、または `zoganVite({ clientOnly: [...] })` の明示globで分類する。event handler内だけでbrowser APIを参照し、module評価とserver renderが安全な通常hydrate componentまでclient-onlyにする必要はない。
+top-level browser accessやbrowser専用dependencyのためSSRで安全に評価できないmoduleは、先頭の `'use client-only'` directive、または `zoganVite({ clientOnly: [...] })` の明示globで分類する。逆にserver secretやNode専用処理を持つmoduleは`'use server-only'`または`serverOnly` globで分類する。event handler内だけでbrowser APIを参照し、module評価とserver renderが安全な通常hydrate componentまでclient-onlyにする必要はない。
 
-SSR buildではstatic importerとdynamic importerの両方をentryまで逆向きに辿る。到達可能なら見つけたentryから対象moduleまでのpath全体を表示してbuildを失敗させる。directory名や特定API importを暗黙には分類しない。
+SSR buildからclient-onlyへ、client buildからserver-onlyへstatic/dynamic importerを逆向きに辿る。到達可能ならentryから対象moduleまでのpath全体を表示してbuildを失敗させる。directory名や特定API importを暗黙には分類しない。
 
 Island用dynamic importはclient entryからだけ到達させる。server-reachable moduleにdynamic importを書いてもclient-only境界を越えたことになる。

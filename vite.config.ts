@@ -106,11 +106,21 @@ export default defineConfig({
           node: true,
         },
         rules: {
+          // Command-line validators report their successful result to stdout.
+          "eslint/no-console": "off",
           "typescript/no-unsafe-argument": "off",
           "typescript/no-unsafe-assignment": "off",
           "typescript/no-unsafe-call": "off",
           "typescript/no-unsafe-member-access": "off",
           "typescript/no-unsafe-return": "off",
+        },
+      },
+      {
+        files: ["**/*.d.ts"],
+        rules: {
+          // Ambient module declarations cannot place imports inside the declared
+          // module, so inline import() types are the least leaky representation.
+          "typescript/consistent-type-imports": "off",
         },
       },
       {
@@ -229,6 +239,9 @@ export default defineConfig({
       "eslint/max-lines": "off",
       "eslint/max-lines-per-function": "off",
       "no-alert": "error",
+      // Library and test code must not leak ad-hoc logs. Runtime diagnostics are
+      // deliberately warnings so enhancement failures preserve their fallback.
+      "no-console": ["error", { allow: ["warn"] }],
       "no-debugger": "error",
       "no-eval": "error",
       "no-implied-eval": "error",
@@ -244,6 +257,8 @@ export default defineConfig({
       "typescript/prefer-readonly-parameter-types": "off",
       "typescript/no-explicit-any": "error",
       "typescript/no-floating-promises": "error",
+      "typescript/consistent-type-imports": "error",
+      "typescript/no-import-type-side-effects": "error",
       "typescript/no-misused-promises": "error",
       "typescript/no-non-null-assertion": "error",
       "typescript/no-unsafe-argument": "error",
@@ -254,6 +269,7 @@ export default defineConfig({
       // The protocol intentionally uses raw data-* names and distinguishes
       // missing attributes from empty values; getAttribute is clearer here.
       "unicorn/prefer-dom-node-dataset": "off",
+      "import/no-duplicates": "error",
       // Adding `u` changes regexp parsing and matching semantics. Unicode-aware
       // expressions are chosen case by case instead of rewritten globally.
       "eslint/require-unicode-regexp": "off",

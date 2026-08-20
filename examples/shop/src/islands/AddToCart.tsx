@@ -1,7 +1,6 @@
 import type { TargetedSubmitEvent } from "preact";
 import { useState } from "preact/hooks";
 import type { JsonObject } from "zogan";
-import { refreshFragment } from "zogan/client";
 
 export type AddToCartProps = JsonObject & {
   readonly disabled: boolean;
@@ -9,7 +8,6 @@ export type AddToCartProps = JsonObject & {
   readonly productId: number;
 };
 
-const CART_BADGE_FRAGMENT = "/fragments/cart-badge";
 const activeSubmissions = new WeakSet<HTMLFormElement>();
 
 export default function AddToCart({
@@ -42,7 +40,7 @@ export default function AddToCart({
         throw new Error(`unexpected response ${response.status}`);
       }
       await response.json();
-      await refreshFragment(CART_BADGE_FRAGMENT);
+      location.assign("/cart");
     } catch {
       // Once a POST has been dispatched, a network failure cannot prove that the
       // server did not commit it. Never replay the mutation automatically.

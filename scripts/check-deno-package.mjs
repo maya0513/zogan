@@ -67,7 +67,8 @@ try {
       'import { Hono } from "hono";',
       'import { h } from "preact";',
       'import { cachePolicy, createZogan, defineClientIsland, defineIsland, FragmentSlot, Island, privateNoStore, publicCache, type CachePolicy, type IslandDescriptor, type ZoganOptions } from "zogan";',
-      'import { refreshFragment, start, type StartOptions } from "zogan/client";',
+      'import { start, type StartOptions } from "zogan/client";',
+      'import { startFragments, type StartFragmentsOptions } from "zogan/fragments";',
       'import { zoganVite, type ZoganPluginOptions } from "zogan/vite";',
       'const layout: NonNullable<ZoganOptions["layout"]> = ({ children }) => h("html", null, children);',
       "type Types = [CachePolicy, IslandDescriptor];",
@@ -80,15 +81,16 @@ try {
       '  if (response.status !== 200 || !(await response.text()).includes("Deno")) throw new Error("SSR failed");',
       "});",
       "const startOptions: StartOptions = { islands: {} };",
+      "const fragmentOptions: StartFragmentsOptions = {};",
       "const viteOptions: ZoganPluginOptions = {};",
-      "void [cachePolicy, defineClientIsland, defineIsland, Island, privateNoStore, refreshFragment, start, startOptions, zoganVite(viteOptions)];",
+      "void [cachePolicy, defineClientIsland, defineIsland, Island, privateNoStore, start, startFragments, startOptions, fragmentOptions, zoganVite(viteOptions)];",
     ].join("\n"),
   );
 
   run("deno", ["test", "--config", "deno.json", "smoke_test.ts"], consumer);
 
   const manifest = JSON.parse(readFileSync(join(temporary, "package", "package.json"), "utf8"));
-  for (const entry of [".", "./client", "./vite"]) {
+  for (const entry of [".", "./client", "./fragments", "./vite"]) {
     if (typeof manifest.exports?.[entry]?.types !== "string") {
       throw new TypeError(`packed manifest is missing Deno-readable types for ${entry}`);
     }

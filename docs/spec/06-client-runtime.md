@@ -2,55 +2,45 @@
 
 ## 6.1 公開surface
 
-`zogan/client` のruntime value exportは2つだけである。
+browser runtimeは責務ごとに別entryである。
 
 ```ts
-import { refreshFragment, start } from "zogan/client";
+import { start } from "zogan/client";
+import { startFragments } from "zogan/fragments";
+
+const islands = start({ islands: loaders, root: document.documentElement });
+const fragments = startFragments({ root: document.documentElement });
+
+islands.dispose();
+fragments.dispose();
 ```
 
-- `start(options?)`: initial documentの明示markerを1回scanする。
-- `refreshFragment(src)`: marker値が完全一致するslotを明示的に更新する。
+- `zogan/client` の `start()` はIslandだけを起動する。
+- `zogan/fragments` の `startFragments()` はFragmentだけを取得する。
+- 両方とも指定rootを一度scanし、そのrootだけを所有するdispose handleを返す。
+- `root`の既定値は`document.documentElement`である。
 
-module importだけではDOMへ触れない。DOMのないserver/Deno環境でもimportできる。
+module importだけではDOMへ触れない。DOMのないserver/Deno環境でもimportできる。呼び出し時にdocumentがなく、rootも与えられなければ例外にする。
 
-## 6.2 `start`
+## 6.2 rootとlifecycle
 
-```ts
-interface StartOptions {
-  readonly islands?: Readonly<Record<string, IslandLoader>>;
-}
-```
+runtimeはmodule-globalなdocument singletonではない。互いに重ならないrootへ複数instanceを開始できる。各instanceは開始時に存在するmarkerだけをscanし、`MutationObserver`や公開rescan APIを持たない。
 
-`start()` は次の順に行う。
+`dispose()`はpending triggerと所有するPreact rootを停止し、runtimeが置換または起動した領域を開始前のserver fallbackへ戻す。dispose後に到着したnetwork/module結果はDOMへ適用しない。同じhandleを複数回disposeしても安全である。
 
-1. loader mapを登録する。
-2. `document.documentElement` 以下のFragment markerをscanする。
-3. 同じ範囲のIsland markerをscanする。
-
-2回目の呼び出しは警告して無視する。module scriptはdocument parse後に実行される配置にする。
-
-runtimeは一般的なDOM mutation observerではない。initial documentと、Fragmentによって新しく挿入されたnodesだけをscanする。applicationが任意に後付けしたmarkerを起動する公開scannerはない。
-
-runtime外からmarker elementをmove/removeしてlifecycleを管理する用途も対象外である。async callbackが到着すれば接続・owner・marker snapshot guardで適用を止めるが、任意の外部DOM操作をcleanup通知としてobserveはしない。
+同じmarkerを複数runtimeで同時に所有する使い方はcontract外である。Viteの`virtual:zogan/islands`は開始済みruntimeを`runtime`としてexportするので、applicationはそのhandleをlifecycleへ組み込める。
 
 ## 6.3 native browser behavior
 
-runtimeは次のlistenerを登録しない。
+どちらのruntimeもdocumentの`click` / `submit`、windowの`popstate` / `pageshow`をlistenしない。anchor、form、back/forward、reload、redirect、download、external navigationはbrowserの標準動作である。
 
-- document `click`
-- document `submit`
-- window `popstate`
-- window `pageshow`
+mutation後に別のserver表現と同期したい場合は通常のPageへnavigateする。Island自身が所有するformへ局所的なsubmit handlerを付ける場合も、SSR fallbackの`action` / `method`とserver routeを完成させ、失敗時にnative submitが成立するようにする。
 
-したがってanchor、form、back/forward、reload、redirect、download、external navigationはbrowserの標準動作である。mutation routeではPost/Redirect/Getを使い、必要な局所再取得だけをapplication eventから `refreshFragment()` で呼ぶ。
-
-Island自身が所有するformへ局所的なsubmit handlerを付けることはできる。その場合もSSR fallbackの`action` / `method`とserver routeを完成させ、Island失敗時はnative submitが成立するようにする。これはzogan runtimeによるdocument-wide interceptionではない。
-
-zoganはURL bar、history state、document title、head、scroll、focusを更新しない。BFCacheからの復帰時にも自動refreshしない。applicationが最新値を必要とする場合は、自身の`pageshow` handlerから対象URLの`refreshFragment()`を明示的に呼ぶ。
+zoganはURL bar、history state、document title、head、scroll、focusを更新しない。BFCacheからの復帰時にも自動取得しない。
 
 ## 6.4 trigger scheduler
 
-FragmentとIslandは共通schedulerを使う。
+FragmentとIslandは同じtrigger vocabularyを使う。
 
 | trigger | browser primitive | cleanup |
 |---|---|---|
@@ -58,52 +48,34 @@ FragmentとIslandは共通schedulerを使う。
 | `idle` | `requestIdleCallback` またはtimer | idle callback / timerをcancel |
 | `visible` | `IntersectionObserver` | observerをdisconnect |
 | `media:QUERY` | `matchMedia` change listener | listenerをremove |
-| `manual` | scheduleしない | なし。Fragmentのみ |
 
-各triggerは1回だけ発火する。target subtreeを置換する前にpending cleanupを実行する。必要なbrowser APIが存在しない場合は、別triggerへ勝手に変更せずfallbackを維持する。
+triggerは一度だけ発火する。必要なbrowser APIがなければ別triggerへ変更せずfallbackを維持する。imperative refresh、manual trigger、retry、pollingは提供しない。
 
 ## 6.5 Fragment runtime
 
-Fragment取得では、URL、redirect、status、content typeをDOM変更前に検査する。同一の正規化済みURLは進行中requestを共有する。
+Fragment runtimeはURL、protocol marker、予約attribute、wrapper、ownership、redirect、status、content typeをDOM変更前に検査する。同じruntime内の同一absolute URLは、進行中requestだけを共有する。
 
-automatic triggerはscan時の `src` を対象にする。`refreshFragment(src)` は現在のdocumentからraw marker値が `src` と完全一致する全slotを探す。いずれもIslandが所有するsubtreeと、正規化srcがancestor Fragmentと一致するinclude cycleをskipし、対応containerでないmarkerはfetch前に拒否する。
+response適用時は接続、runtime token、src/trigger/protocol snapshot、予約attribute、ownerを再確認する。古いresponse、削除済みtarget、marker変更済みelement、未知の`data-zogan-*`が追加されたelement、待機中に別boundary配下へ移動したelementを更新しない。
 
-response適用時はgeneration、document接続、現在のsrc/trigger marker、予約attribute allowlist、Island owner不在、ancestor source cycle不在を再確認する。古いresponse、削除済みtarget、marker変更済みelement、未知の`data-zogan-*`が追加されたelement、待機中にIsland/cycle配下へ移動したelementを更新しない。
-
-置換範囲の古いIsland/Fragmentをdisposeし、childrenを置換してから、挿入範囲だけを再scanする。page全体を毎回scanしない。
+Fragment responseにFragmentまたはIsland markerがあればresponse全体を拒否する。wrapper elementは残し、childrenだけをcontextual parserで一度置換する。挿入した内容を再scanしない。
 
 ## 6.6 Island runtime
 
-Island loaderはtrigger発火後にだけ呼ぶ。ID単位でmodule Promiseをmemoizeし、default exportがPreact componentであることを検査する。module待機後にもowner、予約attribute allowlist、ID/mode/trigger/raw propsのsnapshotを再確認し、別Islandのsubtreeへ移動したtarget、未知の`data-zogan-*`が追加されたtarget、marker変更済みtargetを起動しない。
+Island loaderはtrigger発火後にだけ呼ぶ。runtimeごとにID単位でmodule Promiseをmemoizeし、default exportがPreact componentであることを検査する。module待機後にもowner、protocol、予約attribute、ID/mode/trigger/raw propsのsnapshotを再確認する。
 
-`hydrate` はserver childrenをPreactへ接続する。`mount` はserver fallbackを消してclient componentをrenderする。activation前のchildrenをcloneしておき、同期的なrender failureでは復元する。
+`hydrate` はserver childrenをPreactへ接続する。`mount` はserver fallbackを消してclient componentをrenderする。activation前のchildrenをcloneし、同期的なrender failureまたはdisposeでは復元する。
 
-`div`以外のwrapper、不正ID、欠落loader、欠落・壊れたprops、欠落・未知mode、欠落・未知trigger、module failure、削除済みtargetではserver DOMを維持する。wrapperとIDをloader lookup前に検証し、propsはparse後も全nested valueをfinite JSONとして再帰検証する。
+`div`以外のwrapper、不正ID、欠落loader、欠落・壊れたprops、欠落・未知mode、欠落・未知trigger、module failure、削除済みtargetではserver DOMを維持する。Island内のFragmentとnested Islandは拒否する。
 
-## 6.7 concurrency model
+## 6.7 protocolとstate
 
-runtimeが持つのは、局所的な短命stateだけである。
+serverはすべてのFragment/Island markerに`data-zogan-protocol="1"`を出す。clientはexact versionを要求し、欠落または不一致ならfallbackを維持する。boundaryごとの予約attribute allowlistもexactである。
+
+runtimeが持つのは局所的な短命stateだけである。
 
 - URLごとのin-flight Fragment Promise
 - IDごとのIsland module Promise
-- elementごとのclaim、generation、activation token
+- elementごとのclaim、activation token、開始前fallback
 - pending trigger cleanup
 
-application data、current route、form state、history snapshotは持たない。Fragment responseの永続cacheも持たない。
-
-network requestはgenerationが無効になっても継続しうる。generation checkがDOMへの古い適用を防ぐ。timeout、自動retry、backoffは実装しない。
-
-## 6.8 `refreshFragment`
-
-```ts
-declare function refreshFragment(src: string): Promise<void>;
-```
-
-用途は、applicationが知っているmutationや外部eventの後に、既にpageへ宣言されたslotを再取得することである。
-
-```ts
-await addToCart(sku);
-await refreshFragment("/fragments/cart-badge");
-```
-
-対象となるtargetが0件なら警告してresolveする。Island subtreeのmarkerは対象に数えない。複数targetがあれば1 responseを全targetへ適用する。関数自身は任意DOM selector、HTTP method、request body、swap modeを受け取らない。
+application data、current route、form state、history snapshot、Fragment responseの永続cacheは持たない。request timeout、abort、自動retry、backoffも実装しない。

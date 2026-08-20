@@ -40,23 +40,23 @@ pnpm exec vp run ci:quality
 - mutation routeはPost/Redirect/Getを使い、fixtureでは`303`を返す。
 - SSRだけでlink、form、Fragment fallbackが利用できる。
 - Fragmentのnetwork/status/media-type/redirect/parser前検証失敗で既存childrenを維持する。
-- 同じURLの同時取得、複数slotへのfan-out、世代race、削除済みtarget、待機中のownership/marker/ancestor変更を検証する。
-- direct A→A / indirect A→B→A include cycleをautomatic/manual双方で拒否し、same-src siblingと非循環A→Bは許可する。
+- 同じURLの同時取得、複数slotへのfan-out、削除済みtarget、待機中のownership/marker変更を検証する。
+- Fragment response内のFragment/Island markerを拒否し、挿入内容を再scanしない。
 - `tbody`、`tr`、`select`、`optgroup`を含むcontextual parsingを検証する。
-- 差し替えられたsubtreeのpending workとPreact rootをdisposeし、新しいFragment/Islandだけをscanする。
+- runtime handleのdisposeがpending workを止め、開始前のserver fallbackを復元する。
 - Island moduleはtrigger前にloadされず、同じIDのin-flight/successを共有し、rejection後はretryできる。
 - `div`以外のIsland wrapper、不正ID、loader、再帰的finite JSON props、必須mode、必須trigger、待機中のID/mode/trigger/raw props変更、Preact activationの失敗でSSR/fallbackを維持する。
-- 初めからIsland内にあるFragmentはautomatic/manualとも取得せず、取得開始後にIsland内へ移ったFragmentは反映しない。nested Islandもscan時/activate直前の双方で起動しない。同一elementのdual markerとboundary allowlist外の`data-zogan-*`は両runtimeがasync処理の前後で拒否する。
+- Fragment/Islandのnestをserver renderとclient runtimeの双方で拒否する。同一elementのdual marker、protocol不一致、boundary allowlist外の`data-zogan-*`はasync処理の前後で拒否する。
 
 ### Vite/package
 
-- `zogan`、`zogan/client`、`zogan/vite`のruntime export名をexact allowlistで検査する。
+- `zogan`、`zogan/client`、`zogan/fragments`、`zogan/vite`のruntime export名をexact allowlistで検査する。
 - packed tarballを`publint`、`attw`、TypeScript smoke testへ通す。
 - Vite pluginはIslandごとのdynamic importを生成し、初期entryへ静的に束ねない。
 - plugin testはfilename stemの文字pattern、重複ID、Islandごとのloader生成を検査する。
 - acceptance/runtime testはdescriptor IDとloader keyの一致、default component export、不一致時のfallback維持を検査する。pluginがdescriptor sourceまで照合したとは見なさない。
-- SSR graphから明示的client-only moduleへのstatic/dynamic到達を、到達path付きで失敗させる。
-- npmとJSRで3 entry pointの形を一致させ、browser bundleにNode runtimeを混入させない。
+- SSR graphからclient-only moduleへ、client graphからserver-only moduleへのstatic/dynamic到達を、到達path付きで失敗させる。
+- npmとJSRで4 entry pointの形を一致させ、browser bundleにNode runtimeを混入させない。
 
 ## 8.3 coverage gate
 
@@ -74,7 +74,7 @@ thresholdを下げる変更は、意図したcontract削除と同じreviewを必
 
 ## 8.4 size/performance gate
 
-gzip後の公開entry budgetはclient 5 KiB、server 4 KiB、Vite 5 KiBである。`package:check`がbuild artifactを直接測る。
+gzip後の公開entry budgetはclient 5 KiB、fragments 4 KiB、server 4 KiB、Vite 5 KiBである。`package:check`がbuild artifactを直接測る。
 
 benchmarkはNode 24 baselineを使い、3 runそれぞれのmedianの中央を採用する。個別benchmarkがbaselineから20%を超えて遅くなれば失敗する。baselineを更新するときは環境、変更理由、profile結果をreviewする。
 

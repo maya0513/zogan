@@ -17,6 +17,7 @@
     "paths": {
       "zogan": ["./src/server/index.ts"],
       "zogan/client": ["./src/client/index.ts"],
+      "zogan/fragments": ["./src/fragments/index.ts"],
       "zogan/vite": ["./src/vite/index.ts"]
     }
   },

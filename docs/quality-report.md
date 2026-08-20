@@ -11,6 +11,7 @@
 - type-aware rule と TypeScript Go toolchain による full type check
 - 未使用の lint disable を error 化
 - correctness、nursery、pedantic、performance、suspicious と、安全性、import、Promise、accessibility、hooks、Vitest の規則を error 化
+- runtime warning／CLI結果以外の`console`、重複import、valueとして不要なtype import、type-only importのside effectを禁止
 
 相互に矛盾する preference rule を一括で有効にはせず、実行環境や public API に必要な例外だけをファイル範囲付き override または理由付き disable として記録する。
 
@@ -18,14 +19,14 @@
 
 コマンド：`vp test run --coverage`
 
-15 test files、230 tests が成功した。
+15 test files、217 tests が成功した。
 
 | 指標       | 測定値 | 全体閾値 |
 | ---------- | -----: | -------: |
-| Statements | 98.05% |      95% |
-| Lines      | 98.77% |      95% |
-| Functions  | 98.27% |      95% |
-| Branches   | 96.79% |      90% |
+| Statements | 97.28% |      95% |
+| Lines      | 98.29% |      95% |
+| Functions  | 98.50% |      95% |
+| Branches   | 95.73% |      90% |
 
 全体閾値に加え、次の重要境界へファイル単位の gate を置く。
 
@@ -35,7 +36,7 @@
 - `src/vite/client-only.ts`: statements／lines／functions 100%、branches 90%
 - `src/vite/islands-entry.ts`: 全指標 100%
 
-テストは、必須 CachePolicy、Hono 非拡張、one URL／one representation、native link／form、Fragment の fetch 重複排除・race・削除 target・contextual parsing・failure fallback、nested Island、fresh props 回帰、typed descriptor、lazy loader、chunk／hydrate failure、client-only graph を含む。
+テストは、必須 CachePolicy、Hono 非拡張、one URL／one representation、native link／form、Fragment の fetch 重複排除・descriptor race・削除 target・contextual parsing・failure fallback・response境界拒否、root-scoped dispose、nested owner、typed descriptor、lazy loader、chunk／hydrate failure、client-only/server-only graph を含む。
 
 ## 性能基準
 
@@ -56,11 +57,12 @@
 
 コマンド：`vp run package:check`
 
-| Entry          | gzip 測定値 | hard limit |
-| -------------- | ----------: | ---------: |
-| `zogan/client` |    3.65 KiB |      5 KiB |
-| `zogan` server |    2.35 KiB |      4 KiB |
-| `zogan/vite`   |    2.90 KiB |      5 KiB |
+| Entry             | gzip 測定値 | hard limit |
+| ----------------- | ----------: | ---------: |
+| `zogan/fragments` |    1.68 KiB |      4 KiB |
+| `zogan/client`    |    1.64 KiB |      5 KiB |
+| `zogan` server    |    2.51 KiB |      4 KiB |
+| `zogan/vite`      |    3.03 KiB |      5 KiB |
 
 同じ command で実 tarball を作成し、publint、Are The Types Wrong、Vite 8 peer、全 runtime entry の import、公開 value export の allowlist、全 vNext API／型の consumer compile を検証する。npm package は ESM only である。
 
@@ -77,7 +79,7 @@
 コマンド：`vp run ci:deno`、`vp run ci:node-current`
 
 - Deno 2.9+ で server／client／Vite source とサンプルを type check・test・build
-- 一時 Deno consumer から npm tarball の三 entry と vNext API／型を検証
+- 一時 Deno consumer から npm tarball の四 entry と vNext API／型を検証
 - npm／JSR の runtime export を比較し、publish file boundary と import map を検査
 - `deno doc --lint` と `deno publish --dry-run` を実行。Hono augmentation を廃止したため `--allow-slow-types` は使わず、peer typeとopaque symbolに由来する既知のprivate-type-refだけを名前単位で検査する
 - Node current job で build、unit tests、Vite peer を再検証

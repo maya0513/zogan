@@ -7,9 +7,10 @@
 import type { Plugin } from "vite";
 import { isAbsolute, resolve } from "node:path";
 import {
-  findServerReachPath,
-  formatReachError,
+  findEnvironmentReachPath,
+  formatEnvironmentReachError,
   hasClientOnlyDirective,
+  hasServerOnlyDirective,
   matchesGlob,
 } from "./client-only.ts";
 import {
@@ -23,11 +24,16 @@ import type { ZoganPluginOptions } from "./contracts.ts";
 const isClientOnlyModule = (id: string, code: string, globs: readonly string[]): boolean =>
   hasClientOnlyDirective(code) || globs.some((glob) => matchesGlob(id, glob));
 
+const isServerOnlyModule = (id: string, code: string, globs: readonly string[]): boolean =>
+  hasServerOnlyDirective(code) || globs.some((glob) => matchesGlob(id, glob));
+
 /** Creates the Vite plugin for Island entries and client-only boundary checks. */
 export const zoganVite = (options: ZoganPluginOptions = {}): Plugin => {
   const globs = options.clientOnly ?? [];
+  const serverGlobs = options.serverOnly ?? [];
   const islandsDir = options.islandsDir ?? "src/islands";
   const clientOnlyIds = new Set<string>();
+  const serverOnlyIds = new Set<string>();
   let root = process.cwd();
 
   return {
@@ -50,18 +56,18 @@ export const zoganVite = (options: ZoganPluginOptions = {}): Plugin => {
 
     transform(code, id) {
       if (isClientOnlyModule(id, code, globs)) clientOnlyIds.add(id);
+      if (isServerOnlyModule(id, code, serverGlobs)) serverOnlyIds.add(id);
       return null;
     },
 
     buildEnd(error) {
       if (error !== undefined) return;
-      // Vite 8 の environment consumer を正本とし、multi-environment build でも
-      // 実際の server graph だけを検査する。
-      if (this.environment.config.consumer !== "server") return;
-
-      for (const id of clientOnlyIds) {
-        const path = findServerReachPath(this, id);
-        if (path !== null) this.error(formatReachError(path));
+      const consumer = this.environment.config.consumer;
+      const boundary = consumer === "server" ? "client-only" : "server-only";
+      const ids = consumer === "server" ? clientOnlyIds : serverOnlyIds;
+      for (const id of ids) {
+        const path = findEnvironmentReachPath(this, id);
+        if (path !== null) this.error(formatEnvironmentReachError(path, boundary, consumer));
       }
     },
   };

@@ -3,7 +3,7 @@ import { h, type ComponentType } from "preact";
 import { describe, expect, expectTypeOf, test } from "vitest";
 import * as server from "../../src/server/index";
 import {
-  createZogan,
+  type createZogan,
   defineClientIsland,
   defineIsland,
   type CachePolicy,

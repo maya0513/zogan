@@ -53,6 +53,7 @@ const island = (
   options: { mode?: string; trigger?: string; props?: string; body?: string } = {},
 ) =>
   `<div data-zogan-island="${id}" data-zogan-mode="${options.mode ?? "hydrate"}" ` +
+  `data-zogan-protocol="1" ` +
   `data-zogan-trigger="${options.trigger ?? "load"}" ` +
   `data-zogan-props='${options.props ?? "{}"}'>${options.body ?? "<span>SSR</span>"}</div>`;
 
@@ -397,7 +398,7 @@ describe("lazy islands", () => {
 
     await new Promise((done) => setTimeout(done, 0));
     expect(element.textContent).toBe("SSR");
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining("outer island owns"));
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("nested Fragment or Island"));
   });
 
   test.each([
@@ -482,5 +483,20 @@ describe("lazy islands", () => {
     await vi.waitFor(() => expect(outer).toHaveBeenCalledOnce());
     expect(inner).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalled();
+  });
+
+  test("an Island inside a Fragment is rejected before loading", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const inner = moduleOf(() => <span>inner</span>);
+    registerIslands({ Inner: inner });
+    const owner = document.createElement("div");
+    owner.setAttribute("data-zogan-fragment", "/owner");
+    owner.innerHTML = island("Inner");
+    document.body.replaceChildren(owner);
+
+    hydrateIslands([owner]);
+
+    expect(inner).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("nested Fragment or Island"));
   });
 });

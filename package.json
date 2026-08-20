@@ -19,6 +19,10 @@
       "types": "./dist/client/index.d.ts",
       "default": "./dist/client/index.js"
     },
+    "./fragments": {
+      "types": "./dist/fragments/index.d.ts",
+      "default": "./dist/fragments/index.js"
+    },
     "./vite": {
       "types": "./dist/vite/index.d.mts",
       "default": "./dist/vite/index.mjs"
@@ -34,6 +38,10 @@
       "./client": {
         "types": "./dist/client/index.d.ts",
         "default": "./dist/client/index.js"
+      },
+      "./fragments": {
+        "types": "./dist/fragments/index.d.ts",
+        "default": "./dist/fragments/index.js"
       },
       "./vite": {
         "types": "./dist/vite/index.d.mts",

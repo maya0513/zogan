@@ -75,7 +75,7 @@ const readStringLiteral = (code: string, start: number): StringLiteralResult | n
   return null;
 };
 
-export const hasClientOnlyDirective = (code: string): boolean => {
+const hasDirective = (code: string, expected: string): boolean => {
   let cursor = code.codePointAt(0) === 0xfeff ? 1 : 0;
   if (code.startsWith("#!", cursor)) {
     while (cursor < code.length && !isLineTerminator(code.slice(cursor, cursor + 1))) cursor += 1;
@@ -90,11 +90,17 @@ export const hasClientOnlyDirective = (code: string): boolean => {
     const hasTerminator =
       trailing.end === code.length || code[trailing.end] === ";" || trailing.sawLineTerminator;
     if (!hasTerminator) return false;
-    if (literal.content === "use client-only") return true;
+    if (literal.content === expected) return true;
     cursor = code[trailing.end] === ";" ? trailing.end + 1 : trailing.end;
   }
   return false;
 };
+
+export const hasClientOnlyDirective = (code: string): boolean =>
+  hasDirective(code, "use client-only");
+
+export const hasServerOnlyDirective = (code: string): boolean =>
+  hasDirective(code, "use server-only");
 
 /** ** と * だけを解釈する最小の glob。依存を増やさないため自前で持つ */
 export const matchesGlob = (path: string, glob: string): boolean => {
@@ -144,19 +150,31 @@ export const findServerReachPath = (graph: ModuleGraphLike, target: string): str
   return null;
 };
 
+/** Find an entry-to-module path in the current Vite environment graph. */
+export const findEnvironmentReachPath = findServerReachPath;
+
 /** 到達パスを全部出す。どこで import しているかが分からないと境界違反を直せない。 */
 export const formatReachError = (path: readonly string[]): string => {
+  return formatEnvironmentReachError(path, "client-only", "server");
+};
+
+/** Format a symmetric client/server environment boundary diagnostic. */
+export const formatEnvironmentReachError = (
+  path: readonly string[],
+  boundary: "client-only" | "server-only",
+  consumer: "client" | "server",
+): string => {
   const lines = path.map((id, index) => `${"  ".repeat(index + 1)}${index === 0 ? "" : "→ "}${id}`);
   const last = path.length - 1;
   const finalLine = lines[last];
   if (last > 0 && finalLine !== undefined) {
-    lines[last] = `${finalLine}             ← client-only`;
+    lines[last] = `${finalLine}             ← ${boundary}`;
   }
   return [
-    "zogan: client-only module reached from server bundle",
+    `zogan: ${boundary} module reached from ${consumer} bundle`,
     "",
     ...lines,
     "",
-    "  client-only モジュールをサーバ entry から import しないでください。",
+    `  ${boundary} モジュールを ${consumer} entry から import しないでください。`,
   ].join("\n");
 };

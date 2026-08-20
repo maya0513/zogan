@@ -36,7 +36,7 @@ denoTest("Deno example exposes an explicit clock fragment", async () => {
     pageBody.includes('data-zogan-fragment="/fragments/clock"'),
     "FragmentSlot source missing",
   );
-  assert(pageBody.includes('data-zogan-island="RefreshClock"'), "RefreshClock Island missing");
+  assert(pageBody.includes('data-zogan-trigger="load"'), "automatic Fragment trigger missing");
 
   const fragment = await app.request("http://localhost/fragments/clock");
   const fragmentBody = await fragment.text();

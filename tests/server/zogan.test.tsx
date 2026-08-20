@@ -1,7 +1,16 @@
 import { Hono } from "hono";
 import type { ComponentChildren } from "preact";
 import { describe, expect, test } from "vitest";
-import { cachePolicy, createZogan, privateNoStore, publicCache } from "../../src/server/index";
+import {
+  FragmentSlot,
+  Island,
+  cachePolicy,
+  createZogan,
+  defineIsland,
+  privateNoStore,
+  publicCache,
+  type JsonObject,
+} from "../../src/server/index";
 
 const Layout = ({ children }: { children?: ComponentChildren }) => (
   <html lang="ja">
@@ -51,6 +60,23 @@ describe("createZogan response factories", () => {
     expect(response.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
     expect(response.headers.get("Cache-Control")).toBe("private, no-store");
     expect(await response.text()).toBe('<span>3</span><button type="button">Open</button>');
+  });
+
+  test("fragment response 内の browser-owned boundary を server で拒否する", async () => {
+    const app = new Hono();
+    const zogan = createZogan();
+    const descriptor = defineIsland<JsonObject>({ id: "Nested", component: () => null });
+    app.get("/slot", (c) =>
+      zogan.fragment(c, <FragmentSlot src="/nested">fallback</FragmentSlot>, {
+        cache: privateNoStore(),
+      }),
+    );
+    app.get("/island", (c) =>
+      zogan.fragment(c, <Island of={descriptor} props={{}} />, { cache: privateNoStore() }),
+    );
+
+    expect((await app.request("/slot")).status).toBe(500);
+    expect((await app.request("/island")).status).toBe(500);
   });
 
   test("X-Partial を解釈せず、暗黙の partial response を作らない", async () => {

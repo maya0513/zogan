@@ -67,7 +67,7 @@ export const generateIslandsEntry = (modules: readonly IslandModule[]): string =
     ...loaders,
     "}",
     "",
-    "start({ islands })",
+    "export const runtime = start({ islands })",
     "",
   ].join("\n");
 };

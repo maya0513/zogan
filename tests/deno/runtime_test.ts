@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { h } from "preact";
 import { createZogan, FragmentSlot, privateNoStore, publicCache, type ZoganOptions } from "zogan";
 import * as client from "zogan/client";
+import * as fragments from "zogan/fragments";
 import { zoganVite } from "zogan/vite";
 import { denoTest } from "./test.ts";
 
@@ -56,7 +57,7 @@ denoTest("fragments use explicit routes and keep their cache boundary", async ()
 
 denoTest("client and Vite entries are importable in Deno", () => {
   assert(typeof client.start === "function", "client start export missing");
-  assert(typeof client.refreshFragment === "function", "client fragment export missing");
+  assert(typeof fragments.startFragments === "function", "fragment runtime export missing");
   assert(!("navigate" in client), "removed navigation API was exported");
   assert(!("clientStore" in client), "removed store API was exported");
   assert(zoganVite().name === "zogan", "Vite plugin export missing");

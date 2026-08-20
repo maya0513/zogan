@@ -17,7 +17,6 @@ const FRAGMENT_TRIGGERS = [
   "load",
   "idle",
   "visible",
-  "manual",
   "media:(prefers-reduced-motion)",
 ] as const satisfies readonly FragmentTrigger[];
 
@@ -33,7 +32,7 @@ describe("typed islands", () => {
     expect(
       render(<Island of={counter} props={{ count: 3, label: "Cart" }} trigger="visible" />),
     ).toBe(
-      '<div data-zogan-island="Counter" data-zogan-mode="hydrate" data-zogan-trigger="visible" data-zogan-props="{&quot;count&quot;:3,&quot;label&quot;:&quot;Cart&quot;}"><button type="button">Cart: 3</button></div>',
+      '<div data-zogan-island="Counter" data-zogan-mode="hydrate" data-zogan-protocol="1" data-zogan-trigger="visible" data-zogan-props="{&quot;count&quot;:3,&quot;label&quot;:&quot;Cart&quot;}"><button type="button">Cart: 3</button></div>',
     );
   });
 
@@ -43,8 +42,23 @@ describe("typed islands", () => {
       fallback: ({ label }) => <p>{label} loading</p>,
     });
     expect(render(<Island of={chart} props={{ count: 3, label: "Sales" }} trigger="idle" />)).toBe(
-      '<div data-zogan-island="Chart" data-zogan-mode="mount" data-zogan-trigger="idle" data-zogan-props="{&quot;count&quot;:3,&quot;label&quot;:&quot;Sales&quot;}"><p>Sales loading</p></div>',
+      '<div data-zogan-island="Chart" data-zogan-mode="mount" data-zogan-protocol="1" data-zogan-trigger="idle" data-zogan-props="{&quot;count&quot;:3,&quot;label&quot;:&quot;Sales&quot;}"><p>Sales loading</p></div>',
     );
+  });
+
+  test("nested Island と Island 内 FragmentSlot を server render で拒否する", () => {
+    const inner = defineIsland<JsonObject>({ id: "Inner", component: () => <span>inner</span> });
+    const nestedIsland = defineIsland<JsonObject>({
+      id: "NestedIsland",
+      component: () => <Island of={inner} props={{}} />,
+    });
+    const nestedFragment = defineIsland<JsonObject>({
+      id: "NestedFragment",
+      component: () => <FragmentSlot src="/nested">fallback</FragmentSlot>,
+    });
+
+    expect(() => render(<Island of={nestedIsland} props={{}} />)).toThrow(/nested Islands/i);
+    expect(() => render(<Island of={nestedFragment} props={{}} />)).toThrow(/inside an Island/i);
   });
 
   test("props は必須で、空 object も明示的に serialize する", () => {
@@ -188,7 +202,7 @@ describe("FragmentSlot", () => {
         </FragmentSlot>,
       ),
     ).toBe(
-      '<div data-zogan-fragment="/fragments/cart?compact=1" data-zogan-trigger="visible"><span>Loading</span></div>',
+      '<div data-zogan-fragment="/fragments/cart?compact=1" data-zogan-protocol="1" data-zogan-trigger="visible"><span>Loading</span></div>',
     );
   });
 
@@ -200,7 +214,7 @@ describe("FragmentSlot", () => {
         </FragmentSlot>,
       ),
     ).toBe(
-      '<section class="feed" aria-label="Feed" id="feed" data-zogan-fragment="/feed" data-zogan-trigger="load">Fallback</section>',
+      '<section class="feed" aria-label="Feed" id="feed" data-zogan-fragment="/feed" data-zogan-protocol="1" data-zogan-trigger="load">Fallback</section>',
     );
   });
 
@@ -214,7 +228,7 @@ describe("FragmentSlot", () => {
         </FragmentSlot>,
       ),
     ).toBe(
-      '<tbody class="rows" data-zogan-fragment="/rows" data-zogan-trigger="load"><tr><td>Fallback</td></tr></tbody>',
+      '<tbody class="rows" data-zogan-fragment="/rows" data-zogan-protocol="1" data-zogan-trigger="load"><tr><td>Fallback</td></tr></tbody>',
     );
     expect(
       render(
@@ -223,7 +237,7 @@ describe("FragmentSlot", () => {
         </FragmentSlot>,
       ),
     ).toBe(
-      '<select name="choice" multiple data-zogan-fragment="/options" data-zogan-trigger="load"><option>Fallback</option></select>',
+      '<select name="choice" multiple data-zogan-fragment="/options" data-zogan-protocol="1" data-zogan-trigger="load"><option>Fallback</option></select>',
     );
   });
 

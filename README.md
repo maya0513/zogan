@@ -42,7 +42,7 @@ With Deno 2.9 or later:
 deno add jsr:@maya0513/zogan npm:hono npm:preact
 ```
 
-The JSR package exposes `@maya0513/zogan`, `@maya0513/zogan/client`, and `@maya0513/zogan/vite`, corresponding to the npm entry points `zogan`, `zogan/client`, and `zogan/vite`.
+The JSR package exposes four entries corresponding to `zogan`, `zogan/client`, `zogan/fragments`, and `zogan/vite` on npm.
 
 ## Quick start
 
@@ -144,8 +144,10 @@ Import the generated entry once from the browser entry. The generated module its
 ```ts
 // src/client.ts
 import { islands } from "virtual:zogan/islands";
+import { startFragments } from "zogan/fragments";
 
 void islands;
+startFragments();
 ```
 
 Add an ambient declaration for the virtual module:
@@ -154,6 +156,7 @@ Add an ambient declaration for the virtual module:
 // src/virtual.d.ts
 declare module "virtual:zogan/islands" {
   export const islands: Readonly<Record<string, import("zogan/client").IslandLoader>>;
+  export const runtime: import("zogan/client").ClientRuntime;
 }
 ```
 
@@ -188,9 +191,7 @@ start({ islands: { Counter: () => import("./islands/Counter") } });
 
 `createZogan({ layout })` returns stateless `page` and `fragment` response factories. It does not register routes or modify Hono. A Page uses the optional layout and starts with a doctype; a Fragment is raw HTML and never uses the layout.
 
-Give each Fragment its own root-relative, same-origin URL. `<FragmentSlot>` renders its children as a useful server fallback, then may fetch that URL on `load`, `idle`, `visible`, `manual`, or `media:…`. `load` is the default. Use `as` to choose a supported HTML container and pass normal DOM attributes as needed.
-
-`refreshFragment(src)` from `zogan/client` reloads all connected slots whose source exactly equals `src`. A `manual` slot changes only through this call.
+Give each Fragment its own root-relative, same-origin URL. `<FragmentSlot>` renders its children as a useful server fallback. The opt-in `zogan/fragments` runtime fetches that URL once on `load`, `idle`, `visible`, or `media:…`; `load` is the default. Fragment responses cannot contain another Fragment or Island marker.
 
 ### Typed Island
 
@@ -204,15 +205,15 @@ The descriptor checks server rendering and `<Island>` props at compile time. Run
 
 zogan does not intercept links or forms and does not manage browser history. Build complete Pages, use ordinary form actions, and use redirects such as POST/Redirect/GET after successful mutations. The application remains usable when JavaScript is disabled.
 
-Fragment and Island enhancement is fail-closed. A bad URL, redirect, non-success status, wrong content type, invalid marker, loader error, or render error leaves or restores the server fallback. Nested owners are rejected rather than being updated ambiguously.
+Fragment and Island enhancement is fail-closed. A bad URL, redirect, non-success status, wrong content type, protocol mismatch, loader error, or render error leaves or restores the server fallback. Nested owners are rejected during server rendering.
 
-An interactive Island can enhance a native form with an application JSON endpoint, then refresh a related Fragment. But a failed POST cannot distinguish a pre-commit failure from a lost response after commit. Never replay the native form automatically after dispatch; either ask the user to reload or use an idempotency key shared by the API and native route. With JavaScript disabled, the first submission is native from the start:
+An interactive Island can enhance a native form with an application JSON endpoint. When other regions must reflect a successful mutation, navigate to a complete Page and read authoritative server state again. A failed POST cannot distinguish a pre-commit failure from a lost response after commit, so never replay the native form automatically after dispatch:
 
 ```ts
 try {
   const response = await updateApplicationState();
   if (!response.ok) throw new Error(`unexpected response ${response.status}`);
-  await refreshFragment("/fragments/cart-badge");
+  location.assign("/cart");
 } catch {
   showReloadRequired();
 }
@@ -222,7 +223,7 @@ try {
 
 - [Introduction site](examples/site) — the Cache, Page, Fragment, and Island model at a glance.
 - [Workers + D1 shop](examples/shop) — public product Pages, private cart HTML, native filtering and mutation flows, and an optional Add-to-Cart Island.
-- [Deno example](examples/deno) — explicit Page and Fragment routes plus hydrated and client-only Islands. [Live demo](https://zogan-deno.maya0513.deno.net)
+- [Deno example](examples/deno) — explicit Page and Fragment routes plus a hydrated Island. [Live demo](https://zogan-deno.maya0513.deno.net)
 
 ## Documentation
 

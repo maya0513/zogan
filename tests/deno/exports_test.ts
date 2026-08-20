@@ -1,7 +1,9 @@
 import * as sourceClient from "zogan/client";
+import * as sourceFragments from "zogan/fragments";
 import * as sourceServer from "zogan";
 import * as sourceVite from "zogan/vite";
 import * as builtClient from "../../dist/client/index.js";
+import * as builtFragments from "../../dist/fragments/index.js";
 import * as builtServer from "../../dist/server/index.js";
 import * as builtVite from "../../dist/vite/index.mjs";
 import { denoTest } from "./test.ts";
@@ -23,5 +25,6 @@ const assertSameExports = (
 denoTest("npm and JSR entrypoints expose the same runtime API", () => {
   assertSameExports("server", sourceServer, builtServer);
   assertSameExports("client", sourceClient, builtClient);
+  assertSameExports("fragments", sourceFragments, builtFragments);
   assertSameExports("vite", sourceVite, builtVite);
 });

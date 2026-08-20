@@ -12,16 +12,15 @@ enhancement失敗時のauthoritative UIは、直前まで表示されていたse
 | 未対応wrapper | shared container guard | fetchせずfallback維持 |
 | trigger欠落・不正、または必要なbrowser API不在 | trigger scheduler | fetchせずfallback維持 |
 | network error | `fetch` catch | fallback維持 |
-| manual/opaque/追跡済みredirect | response guard | fallback維持 |
+| opaque/追跡済みredirect | response guard | fallback維持 |
 | 2xx以外 | `Response.ok` | fallback維持 |
 | HTML以外 | media type guard | fallback維持 |
 | 同じURLの並行取得 | in-flight map | 1 requestへ集約 |
-| targetがdispose/削除済み | generation / `isConnected` | responseを無視 |
-| markerの`src` / triggerが変更済み | exact snapshot再検査 | responseを無視 |
-| 待機中にIsland subtreeへ移動 | apply直前owner再検査 | responseを無視 |
-| `refreshFragment` targetなし | document query | 警告してresolve |
-| Fragment inside Island | owner guard | automatic/manualとも取得せずfallback維持 |
-| direct/indirect include cycle | normalized ancestor-src guard | automatic/manualで取得せず、async適用前にもfallback維持 |
+| targetがdispose/削除済み | runtime token / `isConnected` | responseを無視 |
+| markerの`src` / protocol / triggerが変更済み | exact snapshot再検査 | responseを無視 |
+| 待機中に別boundaryのsubtreeへ移動 | apply直前owner再検査 | responseを無視 |
+| Fragment/Islandのnest | server/client owner guard | fetchせずfallback維持 |
+| response内のFragment/Island marker | response marker guard | response全体を無視 |
 | 同一elementにFragment/Island両marker | dual-marker guard | 両方とも起動せずfallback維持 |
 | wrapperに未知の`data-zogan-*` | reserved-attribute allowlist | fetch前・適用前ともfallback維持 |
 
@@ -77,14 +76,13 @@ server側のprogrammer errorをfallbackへ変換しない。deploy前のtestで�
 | 新page / 古client | 欠落・未知reserved attributeは検出できる範囲でfallback維持。既知valueの意味変更は検出不能 | pageとassetを同じrelease unitで配信 |
 | rolling deploy / lazy chunk削除 | module load失敗でfallback維持 | content-hash assetを猶予期間保持 |
 
-現在のmarker protocolにはversion fieldやhandshakeがない。fail-closedは誤表示の範囲を狭めるが、互換性そのものを作らない。
+marker protocolはversion 1をexactに検証するが、handshakeやversion negotiationはない。fail-closedは誤表示の範囲を狭めるが、互換性そのものを作らない。
 
 ## 7.6 残る弱点
 
 - remote includeにはpage HTML、endpoint、runtimeの時間的な依存が残る。
 - `load` Fragmentはpage表示後に追加round tripを発生させる。
 - request timeout、abort、retry、response-size limit、persistent cacheはない。
-- include cycle guardはancestorで繰り返すURLだけを止める。毎回異なるURLを生成する無限chainや最大nest depthは制限しない。
 - `MutationObserver`を持たないため、runtime外でremoveされたpending markerのobserver/listener cleanupは保証しない。document navigationかFragment置換で所有範囲を終える。
 - focus、scroll、announcementは自動管理しない。更新内容に応じたaccessibility対応はapplicationが行う。
 - 同一origin HTMLを信頼するため、endpoint侵害時のDOM injectionを防がない。
@@ -101,9 +99,9 @@ server側のprogrammer errorをfallbackへ変換しない。deploy前のtestで�
 - formがnativeで、mutation routeが303 redirectを返す
 - Fragment failureがfallbackを保持する
 - same URL requestのdedupe、fan-out、generation race、removed target
-- A→A / A→B→A cycle拒否と、same-src sibling / 非循環A→Bの許可
+- Fragment response内の境界拒否と、same-src sibling requestの共有
 - Island moduleがtrigger前にloadされず、失敗時にfallbackを保持する
 - public shellにユーザ固有値がなく、private Fragmentが並行ユーザ間で混ざらない
-- SSR entryからclient-only moduleへstatic/dynamic到達するとbuildが失敗する
+- SSR entryからclient-onlyへ、client entryからserver-onlyへstatic/dynamic到達するとbuildが失敗する
 
 この一覧のどれかを「便利さ」のために反転すると、局所契約からpage-wideな強い契約へ戻る。

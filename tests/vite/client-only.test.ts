@@ -3,6 +3,7 @@ import {
   findServerReachPath,
   formatReachError,
   hasClientOnlyDirective,
+  hasServerOnlyDirective,
   matchesGlob,
 } from "../../src/vite/client-only";
 
@@ -28,6 +29,11 @@ describe("client-only の明示判定", () => {
     expect(hasClientOnlyDirective("'use client-only'\nexport const x = 1")).toBe(true);
     expect(hasClientOnlyDirective('"use client-only";\n')).toBe(true);
     expect(hasClientOnlyDirective("export const x = 1")).toBe(false);
+  });
+
+  test("'use server-only' directive を対称に検出する", () => {
+    expect(hasServerOnlyDirective("'use server-only'\nexport const secret = 1")).toBe(true);
+    expect(hasServerOnlyDirective("'use client-only'\nexport const browser = 1")).toBe(false);
   });
 
   test("leading trivia と先行 directive の後でも検出する", () => {

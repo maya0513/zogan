@@ -17,6 +17,7 @@ try {
   run([
     "src/server/index.ts",
     "src/client/index.ts",
+    "src/fragments/index.ts",
     "--platform",
     "neutral",
     "--out-dir",
@@ -25,7 +26,7 @@ try {
     "--minify",
   ]);
 
-  for (const entry of ["server", "client"]) {
+  for (const entry of ["server", "client", "fragments"]) {
     const output = join(temporary, entry);
     run([`src/${entry}/index.ts`, "--platform", "neutral", "--out-dir", output]);
     mkdirSync(join(root, "dist", entry), { recursive: true });
@@ -37,6 +38,7 @@ try {
   for (const [javascript, types] of [
     ["dist/server/index.js", "./index.d.ts"],
     ["dist/client/index.js", "./index.d.ts"],
+    ["dist/fragments/index.js", "./index.d.ts"],
     ["dist/vite/index.mjs", "./index.d.mts"],
   ]) {
     const path = join(root, javascript);

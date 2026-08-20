@@ -1,26 +1,12 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import type { ComponentChildren } from "preact";
-import {
-  createZogan,
-  defineIsland,
-  FragmentSlot,
-  Island,
-  privateNoStore,
-  publicCache,
-  type JsonObject,
-} from "../../src/server/index";
+import { createZogan, FragmentSlot, privateNoStore, publicCache } from "../../src/server/index";
 
 export interface Cart {
   readonly count: number;
   readonly version: number;
 }
-
-export type StockProps = JsonObject & { inventory: number };
-
-export const StockView = ({ inventory }: StockProps) => <span>{inventory} available</span>;
-
-const StockIsland = defineIsland<StockProps>({ id: "Stock", component: StockView });
 
 const Layout = ({ children }: { readonly children?: ComponentChildren }) => (
   <html lang="ja">
@@ -111,7 +97,7 @@ export const createShop = (): Shop => {
   });
 
   app.get("/fragments/stock/:sku", (context) =>
-    zogan.fragment(context, <Island of={StockIsland} props={{ inventory }} />, {
+    zogan.fragment(context, <span>{inventory} available</span>, {
       cache: publicCache({ sMaxAge: 30 }),
     }),
   );

@@ -1,12 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { __resetFragments, refreshFragment } from "../../src/client/fragments";
+import {
+  __resetFragments,
+  startFragments,
+  type FragmentClientRuntime,
+} from "../../src/client/fragments";
 import { __resetIslands } from "../../src/client/islands";
-import { __resetStart, start } from "../../src/client/start";
-import { createShop, StockView, type Shop } from "../fixtures/shop";
+import { createShop, type Shop } from "../fixtures/shop";
 import { urlOf } from "../helpers/url";
 
 let shop: Shop;
 let cookie: string;
+let fragmentRuntime: FragmentClientRuntime | undefined;
 
 const wireFetch = () => {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
@@ -37,13 +41,14 @@ const load = async (path: string): Promise<Response> => {
 beforeEach(() => {
   shop = createShop();
   cookie = "u=alice";
-  __resetStart();
   __resetFragments();
   __resetIslands();
   document.body.replaceChildren();
 });
 
 afterEach(() => {
+  fragmentRuntime?.dispose();
+  fragmentRuntime = undefined;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -86,7 +91,7 @@ describe("local enhancement boundaries", () => {
     const documentListeners = vi.spyOn(document, "addEventListener");
     const windowListeners = vi.spyOn(window, "addEventListener");
 
-    start();
+    fragmentRuntime = startFragments();
     await vi.waitFor(() =>
       expect(document.querySelector("[data-cart-count]")?.textContent).toBe("カート 3"),
     );
@@ -97,29 +102,15 @@ describe("local enhancement boundaries", () => {
     expect(windowListeners.mock.calls.map(([name]) => name)).not.toContain("popstate");
   });
 
-  test("fresh fragment HTML hydrates with its own fresh props", async () => {
+  test("fresh fragment HTML remains a read-only HTML include", async () => {
     shop.setInventory(9);
     await load("/products/ABC-1");
     wireFetch();
 
-    start({ islands: { Stock: async () => ({ default: StockView }) } });
+    fragmentRuntime = startFragments();
     await vi.waitFor(() => expect(document.body.textContent).toContain("9 available"));
-
-    const island = document.querySelector("[data-zogan-island='Stock']");
-    expect(island?.getAttribute("data-zogan-props")).toBe('{"inventory":9}');
+    expect(document.querySelector("[data-zogan-island]")).toBeNull();
     expect(document.body.textContent).not.toContain("Stock unavailable");
-  });
-
-  test("manual refresh updates matching slots with current server state", async () => {
-    shop.setCart("alice", { version: 1, count: 1 });
-    await load("/products");
-    wireFetch();
-    start();
-    await vi.waitFor(() => expect(document.body.textContent).toContain("カート 1"));
-
-    shop.setCart("alice", { version: 2, count: 5 });
-    await refreshFragment("/fragments/cart-badge");
-    expect(document.body.textContent).toContain("カート 5");
   });
 });
 
@@ -127,7 +118,7 @@ describe("native correctness", () => {
   test("forms remain native and canonical POST uses PRG", async () => {
     await load("/products");
     const fetchMock = wireFetch();
-    start();
+    fragmentRuntime = startFragments();
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
 
     const form = document.querySelector<HTMLFormElement>('form[action="/cart/add"]');

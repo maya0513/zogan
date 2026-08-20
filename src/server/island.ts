@@ -1,5 +1,8 @@
 import { h, type ComponentType, type VNode } from "preact";
+import { useContext } from "preact/hooks";
 import { ISLAND_ID_PATTERN, isIslandId } from "../shared/island-id.ts";
+import { ZOGAN_PROTOCOL_VERSION } from "../shared/protocol.ts";
+import { islandOwner, renderKind } from "./boundary-context.ts";
 
 /** A recursively serializable, finite JSON value. */
 export type JsonValue = null | boolean | number | string | readonly JsonValue[] | JsonObject;
@@ -196,6 +199,12 @@ export interface IslandProps<Props extends JsonObject> {
 /** Render the server-owned half of an island with a fixed, explicit marker. */
 // oxlint-disable-next-line no-explicit-any -- Preact's VNode parameter is invariant.
 export function Island<Props extends JsonObject>(props: IslandProps<Props>): VNode<any> {
+  if (useContext(renderKind) === "fragment") {
+    throw new TypeError("zogan: Island cannot be rendered inside a Fragment response");
+  }
+  if (useContext(islandOwner)) {
+    throw new TypeError("zogan: nested Islands are not supported");
+  }
   const trigger = props.trigger ?? "load";
   assertTrigger(trigger);
   const serialized = serializeProps(props.props);
@@ -204,9 +213,10 @@ export function Island<Props extends JsonObject>(props: IslandProps<Props>): VNo
     {
       "data-zogan-island": props.of.id,
       "data-zogan-mode": props.of.mode,
+      "data-zogan-protocol": ZOGAN_PROTOCOL_VERSION,
       "data-zogan-trigger": trigger,
       "data-zogan-props": serialized,
     },
-    h(props.of[descriptorComponent], props.props),
+    h(islandOwner.Provider, { value: true }, h(props.of[descriptorComponent], props.props)),
   );
 }

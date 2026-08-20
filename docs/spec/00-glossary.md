@@ -27,10 +27,11 @@
 | import | 役割 | browser globalへのimport時アクセス |
 |---|---|---|
 | `zogan` | response helper、cache policy、`FragmentSlot`、Island descriptorとSSR | なし |
-| `zogan/client` | `start`、`refreshFragment`、Island loader型 | なし。`start()` 後にだけDOMへアクセス |
-| `zogan/vite` | Island client entry生成とclient-only到達検査 | なし。Vite/Node用 |
+| `zogan/client` | Island用`start`、runtime handle、loader型 | なし。`start()` 後にだけDOMへアクセス |
+| `zogan/fragments` | Fragment用`startFragments`とruntime handle | なし。`startFragments()` 後にだけDOMへアクセス |
+| `zogan/vite` | Island client entry生成とenvironment境界検査 | なし。Vite/Node用 |
 
-`zogan/client` 自体はimport時にDOMへ触れないため、universal componentからtypeやevent handler用の関数をimportしてserverで評価できる。ただしserver routeで `start()` / `refreshFragment()` を実行しない。top-level browser accessやbrowser専用dependencyのためSSRで安全に評価できないapplication moduleはclient-onlyとして明示し、SSR graphから到達させない。
+browser entry自体はimport時にDOMへ触れないため、universal moduleから型をimportしてserverで評価できる。ただしserver routeで `start()` / `startFragments()` を実行しない。top-level browser accessやbrowser専用dependencyのためSSRで安全に評価できないapplication moduleはclient-onlyとして明示し、SSR graphから到達させない。
 
 ## 0.3 「局所」の意味
 

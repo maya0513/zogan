@@ -42,7 +42,7 @@ const page = (
   <main>
     <h1>Products</h1>
     <Island of={pageStatus} props={{ page: 1 }} />
-    <FragmentSlot src="/fragments/cart" trigger="manual">
+    <FragmentSlot src="/fragments/cart" trigger="visible">
       <span>Cart unavailable</span>
     </FragmentSlot>
     <section>{products}</section>

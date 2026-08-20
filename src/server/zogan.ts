@@ -1,6 +1,7 @@
 import type { Context } from "hono";
 import { h, type ComponentChildren, type ComponentType, type VNode } from "preact";
 import { render as renderToString } from "preact-render-to-string";
+import { renderKind } from "./boundary-context.ts";
 import { cachePolicyState, mergeVary, type CachePolicy } from "./cache.ts";
 
 const HTML_CONTENT_TYPE = "text/html; charset=utf-8";
@@ -60,10 +61,12 @@ export const createZogan = (options: ZoganOptions = {}): Zogan => {
   return Object.freeze({
     page(c: Context, vnode: VNode, renderOptions: ZoganRenderOptions): Response {
       const document = layout === undefined ? vnode : h(layout, null, vnode);
-      return respond(c, `<!DOCTYPE html>${renderToString(document)}`, renderOptions);
+      const guarded = h(renderKind.Provider, { value: "page" }, document);
+      return respond(c, `<!DOCTYPE html>${renderToString(guarded)}`, renderOptions);
     },
     fragment(c: Context, vnode: VNode, renderOptions: ZoganRenderOptions): Response {
-      return respond(c, renderToString(vnode), renderOptions);
+      const guarded = h(renderKind.Provider, { value: "fragment" }, vnode);
+      return respond(c, renderToString(guarded), renderOptions);
     },
   });
 };
