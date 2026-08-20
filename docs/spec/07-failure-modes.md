@@ -19,8 +19,8 @@ enhancement失敗時のauthoritative UIは、直前まで表示されていたse
 | targetがdispose/削除済み | runtime token / `isConnected` | responseを無視 |
 | markerの`src` / protocol / triggerが変更済み | exact snapshot再検査 | responseを無視 |
 | 待機中に別boundaryのsubtreeへ移動 | apply直前owner再検査 | responseを無視 |
-| Fragment/Islandのnest | server/client owner guard | fetchせずfallback維持 |
-| response内のFragment/Island marker | response marker guard | response全体を無視 |
+| Fragment/Islandのnest | Island/Fragment responseのserver guard、documentのclient owner guard | 内側を起動せずfallback維持 |
+| response内の予約済み`data-zogan-*`属性 | response marker guard | response全体を無視 |
 | 同一elementにFragment/Island両marker | dual-marker guard | 両方とも起動せずfallback維持 |
 | wrapperに未知の`data-zogan-*` | reserved-attribute allowlist | fetch前・適用前ともfallback維持 |
 
@@ -39,7 +39,7 @@ enhancement失敗時のauthoritative UIは、直前まで表示されていたse
 | module load失敗 | Promise rejection | SSR/fallback維持、module cacheを外す |
 | default componentなし | module validation | SSR/fallback維持、後のinstanceでretry可能 |
 | targetがdispose/削除済み | activation token / `isConnected` | module結果を無視 |
-| 待機中に別Island subtreeへ移動 | activate直前owner再検査 | module結果を無視 |
+| 待機中に別Fragment/Island subtreeへ移動 | activate直前owner再検査 | module結果を無視 |
 | ID/mode/trigger/raw propsが変更済み | exact snapshot再検査 | module結果を無視 |
 | Preact activation失敗 | try/catch + children snapshot | best-effort cleanup後にfallback復元 |
 | nested Island | owner guard | innerを起動しない |
@@ -83,7 +83,7 @@ marker protocolはversion 1をexactに検証するが、handshakeやversion nego
 - remote includeにはpage HTML、endpoint、runtimeの時間的な依存が残る。
 - `load` Fragmentはpage表示後に追加round tripを発生させる。
 - request timeout、abort、retry、response-size limit、persistent cacheはない。
-- `MutationObserver`を持たないため、runtime外でremoveされたpending markerのobserver/listener cleanupは保証しない。document navigationかFragment置換で所有範囲を終える。
+- `MutationObserver`を持たないため、runtime外でremoveされたpending markerのobserver/listener cleanupは保証しない。document navigationまたは明示的なruntime `dispose()`で所有範囲を終える。
 - focus、scroll、announcementは自動管理しない。更新内容に応じたaccessibility対応はapplicationが行う。
 - 同一origin HTMLを信頼するため、endpoint侵害時のDOM injectionを防がない。
 - runtimeは同じIsland IDのprops schema差を検出できない。
@@ -98,8 +98,8 @@ marker protocolはversion 1をexactに検証するが、handshakeやversion nego
 - `start()` がdocument click、submit、window popstate listenerを登録しない
 - formがnativeで、mutation routeが303 redirectを返す
 - Fragment failureがfallbackを保持する
-- same URL requestのdedupe、fan-out、generation race、removed target
-- Fragment response内の境界拒否と、same-src sibling requestの共有
+- same URL requestのdedupe、fan-out、dispose後のlate response、marker drift、removed target
+- Fragment response内の予約済み`data-zogan-*`属性拒否と、same-src sibling requestの共有
 - Island moduleがtrigger前にloadされず、失敗時にfallbackを保持する
 - public shellにユーザ固有値がなく、private Fragmentが並行ユーザ間で混ざらない
 - SSR entryからclient-onlyへ、client entryからserver-onlyへstatic/dynamic到達するとbuildが失敗する

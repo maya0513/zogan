@@ -27,6 +27,7 @@ export interface StartFragmentsOptions {
 
 /** Handle for cancelling pending work and restoring initial server fallbacks. */
 export interface FragmentClientRuntime {
+  /** Stop this runtime and restore the DOM it owns. */
   dispose(): void;
 }
 

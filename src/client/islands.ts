@@ -10,6 +10,7 @@ export type IslandComponent = ComponentType<any>;
 
 /** Shape returned by a lazy Island module import. */
 export interface IslandModule {
+  /** Default component rendered when the Island is activated. */
   readonly default: IslandComponent;
 }
 

@@ -81,7 +81,7 @@ server descriptor ID、Viteのfilename stem、client marker IDは`^[A-Za-z][A-Za
 
 Island ownerのelementは常にHTML `div`である。clientはlocal nameをloader前に検証し、raw `span` / `template`、SVG/MathML等にIsland markerがあっても起動しない。
 
-`hydrate`はserver componentとclient default componentが同じpropsで同じ初期DOMを作ることを要求する。`mount`はfallback childrenを除去してからclient componentをrenderする。どちらもloader待機後にID、mode、trigger、raw propsのsnapshotをexact再検査し、変更済みなら起動しない。loader/activation失敗時は元のSSR/fallbackを維持または復元する。
+`hydrate`はserver componentとclient default componentが同じpropsで同じ初期DOMを作ることを要求する。`mount`はfallback childrenを除去してからclient componentをrenderする。どちらもloader待機後にID、mode、trigger、raw propsのsnapshotをexact再検査し、変更済みなら起動しない。activation直前にchildrenをcloneし、loader/activation失敗時はそのSSR/fallbackを維持または復元する。
 
 ## B.3 HTTP exchange
 
@@ -97,7 +97,7 @@ Fragment requestは次に固定する。
 
 成功条件はmanual redirectでなく、`Response.ok`がtrueで、`Content-Type`のmedia typeが`text/html`であること。parameter付きmedia typeは許容する。失敗時にpage navigation、retry、fallback削除は行わない。
 
-bodyはwrapperへ挿入するinner HTMLだけで、完全document、`html` / `head`、外側wrapperを含めない。`script`の実行はcontract外であり、`script` / `style`のasset declarationも返さない。CSSはpage shell、対話module固有assetはIsland chunkから供給する。
+bodyはwrapperへ挿入するinner HTMLだけで、完全document、`html` / `head`、外側wrapper、予約済み`data-zogan-*`属性を含めない。`script`の実行はcontract外であり、`script` / `style`のasset declarationも返さない。CSSはpage shell、対話module固有assetはIsland chunkから供給する。
 
 serverの`page()`と`fragment()`はいずれも次を設定する。
 
@@ -113,14 +113,14 @@ policyに`vary`がある場合、既存`Vary`へcase-insensitiveに重複排除�
 1. 一度だけのtrigger発火が、他のFragmentまたはIslandに所有されない対象slotを選ぶ。
 2. URLを再検証し、同じabsolute URLのin-flight requestだけを共有する。
 3. response guard通過後、接続・runtime token・src/trigger/protocol snapshot・reserved attributes・ownerを再検査し、wrapper tagに応じたHTML contextでnodeをparseする。
-4. response内にFragmentまたはIsland markerがないことを検証する。
+4. response内に予約済み`data-zogan-*`属性がないことを検証する。
 5. wrapper element自体を残し、childrenだけを置換する。挿入nodeは再scanしない。
 
 `table`/`tbody`/`thead`/`tfoot`/`tr`/`td`/`th`/`colgroup`/`caption`と`select`/`optgroup`は専用contextでparseする。汎用`div`経由で構造を変形させない。
 
-FragmentとIslandは相互にも同種同士にもnestできない。同じelementへFragment markerとIsland markerの両方を付けたraw markupはmalformedであり、両runtimeが拒否する。wrapperそのものはserver/DOMが所有し、置換対象はchildrenだけである。
+browser runtimeではFragmentとIslandを相互にも同種同士にもnestできない。同じelementへFragment markerとIsland markerの両方を付けたraw markupはmalformedであり、両runtimeが拒否する。wrapperそのものはserver/DOMが所有し、置換対象はchildrenだけである。
 
-application componentが作るnestはserver renderで拒否する。raw/stale DOMのnestと、境界markerを含むFragment responseはclientで拒否する。same-src siblingは同じ進行中requestを共有する。
+Island内部またはFragment response内でapplication componentが作るnestはserver renderで拒否する。通常Page上のFragmentSlot childrenはserver側のowner scopeではないためnestを描画できるが、clientはnested ownerとして拒否する。raw/stale DOMのnestと、予約済み`data-zogan-*`属性を含むFragment responseもclientで拒否する。same-src siblingは同じ進行中requestを共有する。
 
 ## B.5 protocol evolution
 

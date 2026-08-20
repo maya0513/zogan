@@ -191,7 +191,7 @@ start({ islands: { Counter: () => import("./islands/Counter") } });
 
 `createZogan({ layout })` returns stateless `page` and `fragment` response factories. It does not register routes or modify Hono. A Page uses the optional layout and starts with a doctype; a Fragment is raw HTML and never uses the layout.
 
-Give each Fragment its own root-relative, same-origin URL. `<FragmentSlot>` renders its children as a useful server fallback. The opt-in `zogan/fragments` runtime fetches that URL once on `load`, `idle`, `visible`, or `media:…`; `load` is the default. Fragment responses cannot contain another Fragment or Island marker.
+Give each Fragment its own root-relative, same-origin URL. `<FragmentSlot>` renders its children as a useful server fallback. The opt-in `zogan/fragments` runtime fetches that URL once on `load`, `idle`, `visible`, or `media:…`; `load` is the default. Fragment responses cannot contain any reserved `data-zogan-*` attribute, including Fragment and Island markers.
 
 ### Typed Island
 
@@ -205,7 +205,7 @@ The descriptor checks server rendering and `<Island>` props at compile time. Run
 
 zogan does not intercept links or forms and does not manage browser history. Build complete Pages, use ordinary form actions, and use redirects such as POST/Redirect/GET after successful mutations. The application remains usable when JavaScript is disabled.
 
-Fragment and Island enhancement is fail-closed. A bad URL, redirect, non-success status, wrong content type, protocol mismatch, loader error, or render error leaves or restores the server fallback. Nested owners are rejected during server rendering.
+Fragment and Island enhancement is fail-closed. A bad URL, redirect, non-success status, wrong content type, protocol mismatch, loader error, or render error leaves or restores the server fallback. Server rendering rejects boundaries inside a Fragment response and boundaries inside an Island. If a normal Page or stale/raw markup contains another nested owner, the browser runtime rejects it.
 
 An interactive Island can enhance a native form with an application JSON endpoint. When other regions must reflect a successful mutation, navigate to a complete Page and read authoritative server state again. A failed POST cannot distinguish a pre-commit failure from a lost response after commit, so never replay the native form automatically after dispatch:
 
@@ -221,9 +221,9 @@ try {
 
 ## Examples
 
-- [Introduction site](examples/site) — the Cache, Page, Fragment, and Island model at a glance.
+- [Introduction site](examples/site) — the Cache, Page, Fragment, and Island model at a glance, with English as the default and a Japanese page.
 - [Workers + D1 shop](examples/shop) — public product Pages, private cart HTML, native filtering and mutation flows, and an optional Add-to-Cart Island.
-- [Deno example](examples/deno) — explicit Page and Fragment routes plus a hydrated Island. [Live demo](https://zogan-deno.maya0513.deno.net)
+- [Deno code sample](examples/deno) — runnable Hono/Preact code using explicit Page, Fragment, Cache, and typed Island APIs, with Deno tests.
 
 ## Documentation
 
@@ -236,7 +236,7 @@ try {
 - Hono `>=4.13.0 <5`
 - Preact `>=10.29.8 <11`
 - Vite `^8.0.0` when using `zogan/vite` (optional)
-- Deno 2.9+ for the JSR package and Deno example
+- Deno 2.9+ for the JSR package and Deno code sample
 - Node.js 24.11+ for npm development and packaging
 - standards-based server runtimes supported by Hono
 - ESM only

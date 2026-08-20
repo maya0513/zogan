@@ -2548,13 +2548,6 @@
       ]
     },
     "members": {
-      "examples/deno": {
-        "packageJson": {
-          "dependencies": [
-            "npm:@playwright/test@^1.62.1"
-          ]
-        }
-      },
       "examples/shop": {
         "packageJson": {
           "dependencies": [

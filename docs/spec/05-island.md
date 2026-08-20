@@ -141,7 +141,7 @@ activate前にtargetがdisposeまたはdocumentから削除された場合は結
 - Islandの中にIslandをnestしない。outer Preact rootがsubtreeを所有する。
 - Islandの中に `FragmentSlot` を置かない。
 - Fragment responseの中にIslandまたは別のFragmentを置かない。
-- application componentが作るnestはserver renderで拒否し、raw/stale markupはclientでfail closedにする。
+- Island内部またはFragment response内でapplication componentが作るnestはserver renderで拒否する。通常PageのFragmentSlot childrenが作るnestとraw/stale markupはclientでfail closedにする。
 
 これらは「たまたま動くDOM」を許さず、subtree ownerを1つにするための制約である。
 

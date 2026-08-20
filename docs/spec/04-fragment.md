@@ -40,13 +40,13 @@ runtime.dispose();
 
 `zogan/client`のIsland runtimeはFragmentをscanまたはfetchしない。`zogan/fragments`もIslandを起動しない。
 
-同じ正規化URLの同時fetchだけを共有し、結果は永続cacheしない。redirect、非2xx、HTML以外、network error、古いresponse、marker drift、削除済みtargetではDOMを変更しない。disposeはpending triggerをcancelし、置換済みslotを最初のserver fallbackへ戻す。
+同じ正規化URLの同時fetchだけを共有し、結果は永続cacheしない。redirect、非2xx、HTML以外、network error、古いresponse、marker drift、削除済みtargetではDOMを変更しない。disposeはpending triggerをcancelし、置換済みslotをruntimeがDOMを変更する直前のchildrenへ戻す。
 
 ## 4.5 ownership
 
-Fragment responseは`FragmentSlot`または`Island` markerを含められない。applicationがFragment response内に境界componentをrenderするとserverで例外にし、staleまたは改変response内のmarkerはclientで拒否する。
+Fragment responseは予約済み`data-zogan-*`属性を一つも含められない。applicationがFragment response内に`FragmentSlot`または`Island` componentをrenderするとserverで例外にし、raw HTMLに境界markerまたは別の予約属性があればclientでresponse全体を拒否する。
 
-FragmentSlotをIsland内または別FragmentSlot内へnestできない。application生成のnestはserver renderで例外、raw/stale DOMのnestはclientでfallback維持となる。wrapperはserver/DOMが所有し、runtimeが置換するのはchildrenだけである。
+FragmentSlotをIsland内へnestするとserver renderで例外になる。通常Page上のFragmentSlot childrenはserver側のowner scopeではないため別FragmentSlotまたはIslandを描画できるが、そのmarkupはbrowser runtimeがnested ownerとして拒否する。raw/stale DOMのnestもclientでfallback維持となる。wrapperはserver/DOMが所有し、runtimeが置換するのはchildrenだけである。
 
 この制約により、Fragmentはcomponent tree、複数領域transaction、application invalidation graphを持たない。
 

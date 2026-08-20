@@ -8,31 +8,7 @@ import {
   type IslandComponent,
   type IslandLoader,
 } from "../../src/client/islands";
-
-class FakeIntersectionObserver {
-  static instances: FakeIntersectionObserver[] = [];
-  disconnected = false;
-  readonly targets: Element[] = [];
-
-  constructor(
-    private readonly callback: (entries: { isIntersecting: boolean; target: Element }[]) => void,
-    readonly options?: { rootMargin?: string },
-  ) {
-    FakeIntersectionObserver.instances.push(this);
-  }
-
-  observe(target: Element) {
-    this.targets.push(target);
-  }
-
-  disconnect() {
-    this.disconnected = true;
-  }
-
-  enter(isIntersecting = true) {
-    this.callback(this.targets.map((target) => ({ isIntersecting, target })));
-  }
-}
+import { FakeIntersectionObserver } from "../helpers/intersection-observer";
 
 const moduleOf = (component: IslandComponent): IslandLoader =>
   vi.fn(async () => ({ default: component }));
@@ -168,32 +144,46 @@ describe("lazy islands", () => {
   });
 
   test.each([
-    ["missing loader", island("Missing")],
+    ["missing loader", island("Missing"), "no lazy loader registered"],
+    [
+      "missing protocol",
+      island("Broken").replace(' data-zogan-protocol="1"', ""),
+      "unsupported island protocol",
+    ],
+    [
+      "unsupported protocol",
+      island("Broken").replace('data-zogan-protocol="1"', 'data-zogan-protocol="2"'),
+      "unsupported island protocol",
+    ],
     [
       "missing props marker",
-      '<div data-zogan-island="Broken" data-zogan-mode="hydrate" data-zogan-trigger="load"><span>SSR</span></div>',
+      island("Broken").replace(" data-zogan-props='{}'", ""),
+      "missing JSON props",
     ],
-    ["invalid props", island("Broken", { props: "[1]" })],
-    ["null props", island("Broken", { props: "null" })],
-    ["primitive props", island("Broken", { props: "42" })],
-    ["malformed props", island("Broken", { props: "{" })],
-    ["non-finite nested props", island("Broken", { props: '{"nested":{"n":1e400}}' })],
-    ["non-div wrapper", island("Broken").replaceAll("div", "span")],
+    ["invalid props", island("Broken", { props: "[1]" }), "invalid JSON props"],
+    ["null props", island("Broken", { props: "null" }), "invalid JSON props"],
+    ["primitive props", island("Broken", { props: "42" }), "invalid JSON props"],
+    ["malformed props", island("Broken", { props: "{" }), "invalid JSON props"],
+    [
+      "non-finite nested props",
+      island("Broken", { props: '{"nested":{"n":1e400}}' }),
+      "invalid JSON props",
+    ],
+    ["non-div wrapper", island("Broken").replaceAll("div", "span"), "requires an HTML div wrapper"],
     [
       "unknown marker",
       island("Broken").replace("data-zogan-props", 'data-zogan-future="v2" data-zogan-props'),
+      "unknown or overlapping zogan marker",
     ],
-    [
-      "missing mode",
-      '<div data-zogan-island="Broken" data-zogan-trigger="load" data-zogan-props="{}"><span>SSR</span></div>',
-    ],
+    ["missing mode", island("Broken").replace(' data-zogan-mode="hydrate"', ""), "invalid mode"],
     [
       "missing trigger",
-      '<div data-zogan-island="Broken" data-zogan-mode="hydrate" data-zogan-props="{}"><span>SSR</span></div>',
+      island("Broken").replace(' data-zogan-trigger="load"', ""),
+      "invalid activation trigger",
     ],
-    ["invalid mode", island("Broken", { mode: "replace" })],
-    ["invalid trigger", island("Broken", { trigger: "whenever" })],
-  ])("%s warns and preserves SSR", async (_label, html) => {
+    ["invalid mode", island("Broken", { mode: "replace" }), "invalid mode"],
+    ["invalid trigger", island("Broken", { trigger: "whenever" }), "invalid activation trigger"],
+  ])("%s warns for the exact reason and preserves SSR", async (_label, html, warning) => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const loader = moduleOf(() => <span>client</span>);
     registerIslands({ Broken: loader });
@@ -202,7 +192,9 @@ describe("lazy islands", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(document.body.textContent).toBe("SSR");
     expect(loader).not.toHaveBeenCalled();
-    expect(warn).toHaveBeenCalled();
+    expect(
+      warn.mock.calls.some(([message]) => typeof message === "string" && message.includes(warning)),
+    ).toBe(true);
   });
 
   test("an invalid raw Island ID cannot activate even with a matching loader key", () => {

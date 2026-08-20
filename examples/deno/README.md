@@ -1,22 +1,20 @@
-# Deno example
+# Deno code sample
 
-This example runs zogan with Deno, Hono, Preact, and Vite. It demonstrates
-ordinary full-document navigation, explicit cache policies, a separately cached
-FragmentSlot and a typed hydrate Island.
+This example is intentionally not a deployed website. It is a small, runnable
+set of Deno source files showing how to use zogan with Hono and Preact:
+
+- `src/sample.tsx` creates explicit Page and Fragment routes with cache policies.
+- `src/islands/PageStatus.tsx` is a typed SSR/hydrate Island component.
+- `src/client.ts` starts the Island and opt-in Fragment runtimes explicitly.
+- `tests/sample_test.ts` exercises the rendered HTML, cache boundaries,
+  representation rules, and app-instance isolation.
+
+Run the sample checks from this directory:
 
 ```sh
-deno task build
-deno task start
+deno task check
+deno task test
 ```
 
-Open <http://localhost:8000>. Pagination remains a native document navigation
-with or without JavaScript. The clock uses an explicit `/fragments/clock` route
-and is loaded once by the opt-in Fragment runtime. Without JavaScript, its
-server fallback remains useful.
-
-Use `deno task dev` for the Vite development server and `deno task test` for the
-server integration tests.
-
-The production application is configured from the repository root and is
-published to <https://zogan-deno.maya0513.deno.net> by the GitHub repository
-connection configured in the Deno web console.
+The same tests run in the repository Deno CI task. The sample is source and
+test documentation, not a web deployment target.

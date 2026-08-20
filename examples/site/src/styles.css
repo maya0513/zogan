@@ -143,6 +143,11 @@ pre {
   color: var(--green);
 }
 
+.language-link {
+  padding-left: 1rem;
+  border-left: 1px solid var(--line);
+}
+
 .status {
   justify-self: end;
   padding: 0.35rem 0.65rem;

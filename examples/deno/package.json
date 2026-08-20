@@ -3,13 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "scripts": {
-    "e2e": "playwright test"
-  },
   "dependencies": {
     "zogan": "workspace:*"
-  },
-  "devDependencies": {
-    "@playwright/test": "^1.62.1"
   }
 }

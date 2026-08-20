@@ -35,7 +35,7 @@ zogan は `0.0.0` であり、旧 API の利用者を移行させるより、誤
 
 `FragmentSlot` の `src` は root-relative な同一 origin の GET URL である。URL はアプリケーションが route として所有し、server は通常の `text/html` と標準キャッシュヘッダーを返す。opaque な endpoint、暗号化 props、独自 request／response header、server 指定の target や swap command は作らない。
 
-runtime が所有するのは wrapper の子だけである。同じ URL の処理中 fetch は共有するが、結果は永続 cache せず、各slotは一度だけ取得する。redirect、非 2xx、非 HTML、network error、古い応答、削除済み target、不正 URL／container、nested markerを含むresponseではDOMを変更せずfallbackを残す。
+runtime が所有するのは wrapper の子だけである。同じ URL の処理中 fetch は共有するが、結果は永続 cache せず、各slotは一度だけ取得する。redirect、非 2xx、非 HTML、network error、古い応答、削除済み target、不正 URL／container、予約済み`data-zogan-*`属性を含むresponseではDOMを変更せずfallbackを残す。
 
 `FragmentElement` は安全に contextual parse でき、子を持てる HTML container の閉じた集合である。table／select 系は専用 context で parse し、document root、void、raw-text、template、embedded content、SVG／MathML は拒否する。
 
@@ -47,7 +47,7 @@ Fragment は「契約がない」のではない。URL、GET、HTML、cache poli
 
 Vite plugin は `islandsDir` 直下の `.tsx` filename stem を stable ID とし、Island ごとの `() => import(...)` loader を生成する。初期 entry は Island implementation を static import せず、trigger に到達した ID だけを load する。通常 Island module は SSR-safe、`"use client-only"` または明示 glob の module は server graph から到達不能でなければならない。
 
-Fragment と Island は一つのnodeを二重所有しない。Fragment responseはFragmentSlot／Islandを含めず、Islandの内側にもFragmentSlot／別Islandを置けない。applicationが生成するnestはserver renderで拒否し、staleまたは改変markupはbrowser runtimeでfail closedにする。
+Fragment と Island は一つのnodeを二重所有しない。Fragment responseはFragmentSlot／Islandを含めず、Islandの内側にもFragmentSlot／別Islandを置けないため、これらはserver renderで拒否する。通常Page上のFragmentSlot childrenはserver側のowner scopeではないためnestを描画できるが、browser runtimeはnested ownerをfail closedにする。staleまたは改変markupも同様に拒否する。
 
 ## deploy skew は局所的に fail closed する
 
@@ -65,7 +65,7 @@ Fragment route の削除や意味変更にも互換期間を設ける。認証�
 
 Workers + D1 shop はnative filter／pagination／form／PRGを正本とする。cart badgeとstockは一度だけ読む明示的Fragment、AddToCartだけがtyped Islandである。Islandのmutationはアプリケーション固有JSON APIを呼び、成功確認後は完全Pageへ遷移する。POST dispatch後の通信失敗ではnative formを自動再送せず、reloadを促して停止する。
 
-Denoサンプルもnative paginationを使い、clockを一度だけ読むFragment、page statusをtyped Islandとする。両サンプルはJavaScript有効／無効のbrowser testを持つ。
+Denoコードサンプルは、nativeなPage、明示的なFragment、cache policy、typed Islandを使うHono/PreactコードとDenoテストを提供する。公開サイトやbrowser E2Eは持たない。
 
 ## 品質ゲート
 
@@ -77,4 +77,4 @@ coverage は全体閾値に加えて CachePolicy、response factory、Fragment r
 
 npm と JSR は同じ四 entry を公開する。Hono module augmentation を削除したため、JSR の `--allow-slow-types` は不要である。Deno source、npm tarball、Node current、Chromium、Workerd、Vite production build を独立した gate で検証する。
 
-Cloudflare の紹介サイトと Shop、Deno Deploy の公開例は引き続き別 deploy 単位とする。rolling deploy では cache された HTML と content-hashed asset の保持期間を揃え、deploy convenience のために runtime の ownership を広げない。
+Cloudflare の紹介サイトと Shop は別 deploy 単位とする。Deno は公開サイトではなく、コードサンプルとDenoテストとして配布する。rolling deploy では cache された HTML と content-hashed asset の保持期間を揃え、deploy convenience のために runtime の ownership を広げない。

@@ -1,12 +1,25 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import * as publicApi from "../../src/vite/index";
 import { zoganVite } from "../../src/vite/index";
 import { generateIslandsEntry, listIslandModules } from "../../src/vite/islands-entry";
 
 type Hook = (...args: never[]) => unknown;
+
+const temporaryDirectories: string[] = [];
+const createTemporaryDirectory = (prefix: string): string => {
+  const directory = mkdtempSync(join(tmpdir(), prefix));
+  temporaryDirectories.push(directory);
+  return directory;
+};
+
+afterEach(() => {
+  for (const directory of temporaryDirectories.splice(0)) {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
 
 test("公開エントリは zoganVite を維持する", () => {
   // oxlint-disable-next-line unicorn/no-array-sort -- Object.keys creates a fresh array
@@ -180,7 +193,7 @@ describe("server-only のクライアント到達境界", () => {
 
 describe("Island の lazy client entry", () => {
   test("islandsDir 直下の *.tsx stem を ID として loader map を生成する", () => {
-    const dir = mkdtempSync(join(tmpdir(), "zogan-islands-"));
+    const dir = createTemporaryDirectory("zogan-islands-");
     writeFileSync(join(dir, "CartBadge.tsx"), "export default () => null");
     writeFileSync(join(dir, "ProductGallery.tsx"), "export default () => null");
     writeFileSync(join(dir, "Ignored.jsx"), "export default () => null");
@@ -207,7 +220,7 @@ describe("Island の lazy client entry", () => {
   test.each(["bad-name.tsx", "1Cart.tsx", "Cart.Bad.tsx", `${"A".repeat(65)}.tsx`])(
     "不正な filename stem を拒否する: %s",
     (filename) => {
-      const dir = mkdtempSync(join(tmpdir(), "zogan-islands-invalid-"));
+      const dir = createTemporaryDirectory("zogan-islands-invalid-");
       writeFileSync(join(dir, filename), "export default () => null");
       expect(() => listIslandModules(dir)).toThrow(/invalid island ID/);
       expect(() => listIslandModules(dir)).toThrow(filename.slice(0, -4));
@@ -233,7 +246,7 @@ describe("Island の lazy client entry", () => {
   });
 
   test("相対 islandsDir は Vite root 基準の絶対 dynamic import にする", () => {
-    const root = mkdtempSync(join(tmpdir(), "zogan-root-"));
+    const root = createTemporaryDirectory("zogan-root-");
     const dir = join(root, "app/islands");
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, "CartBadge.tsx"), "export default () => null");

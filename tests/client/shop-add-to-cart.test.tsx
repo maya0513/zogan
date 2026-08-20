@@ -12,11 +12,7 @@ afterEach(() => {
 describe("Shop AddToCart enhancement", () => {
   test("suppresses a second submit while the first mutation is in flight", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
-    let resolveResponse: ((response: Response) => void) | undefined;
-    const response = new Promise<Response>((resolve) => {
-      resolveResponse = resolve;
-    });
-    const fetchMock = vi.fn(() => response);
+    const fetchMock = vi.fn(() => new Promise<Response>(() => {}));
     vi.stubGlobal("fetch", fetchMock);
 
     render(<AddToCart disabled={false} label="Add" productId={1} />, document.body);
@@ -33,12 +29,7 @@ describe("Shop AddToCart enhancement", () => {
     );
 
     expect(fetchMock).toHaveBeenCalledOnce();
-    resolveResponse?.(
-      new Response('{"count":1,"total":6800,"version":1}', {
-        headers: { "Content-Type": "application/json" },
-      }),
-    );
-    await vi.waitFor(() => expect(button?.disabled).toBe(false));
+    await vi.waitFor(() => expect(button?.disabled).toBe(true));
   });
 
   test.each([

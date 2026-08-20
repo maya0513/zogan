@@ -194,6 +194,24 @@ describe("typed islands", () => {
 });
 
 describe("FragmentSlot", () => {
+  test("通常 Page の FragmentSlot children は server では境界所有者として扱わない", () => {
+    const nestedIsland = defineIsland<JsonObject>({
+      id: "Nested",
+      component: () => <span>island fallback</span>,
+    });
+
+    const html = render(
+      <FragmentSlot src="/outer">
+        <FragmentSlot src="/inner">fragment fallback</FragmentSlot>
+        <Island of={nestedIsland} props={{}} />
+      </FragmentSlot>,
+    );
+
+    expect(html).toContain('data-zogan-fragment="/outer"');
+    expect(html).toContain('data-zogan-fragment="/inner"');
+    expect(html).toContain('data-zogan-island="Nested"');
+  });
+
   test("既定 div に fragment src、trigger、fallback を出力する", () => {
     expect(
       render(
@@ -288,6 +306,8 @@ describe("FragmentSlot", () => {
     "https://evil.example/x",
     "/x#hash",
     "/x\\y",
+    "/encoded%5Cslash",
+    "/bad/%E0%A4%A",
     "/a/./b",
     "/a/../b",
     "/a/%2e%2e/b",

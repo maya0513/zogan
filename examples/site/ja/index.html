@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="zoganはHonoとPreactのための明示的なPage、Fragment、CachePolicy、型付きIslandを提供します。"
+    />
+    <meta name="theme-color" content="#11130f" />
+    <title>zogan — HonoとPreactの明示的なHTMLレスポンス</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">本文へ移動</a>
+
+    <header class="site-header">
+      <a class="wordmark" href="#top" aria-label="zogan ホーム">
+        <span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        zogan
+      </a>
+
+      <button
+        class="navigation-toggle"
+        type="button"
+        aria-label="ナビゲーションを開く"
+        aria-expanded="false"
+        aria-controls="primary-navigation"
+        data-label-open="ナビゲーションを開く"
+        data-label-close="ナビゲーションを閉じる"
+        data-navigation-toggle
+      >
+        <span></span><span></span>
+      </button>
+
+      <nav
+        id="primary-navigation"
+        class="primary-navigation"
+        aria-label="主要ナビゲーション"
+        data-navigation
+        data-open="false"
+      >
+        <a href="#why">目的</a>
+        <a href="#model">モデル</a>
+        <a href="#quick-start">クイックスタート</a>
+        <a href="#examples">例</a>
+        <a class="language-link" href="../" lang="en">English</a>
+      </nav>
+
+      <span class="status">pre-release</span>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top">
+        <div class="hero-copy" data-reveal>
+          <p class="eyebrow"><span></span> 明示的なHTML、型付きIsland</p>
+          <h1>ページを描画する。<br /><em>ブラウザに任せる。</em></h1>
+          <p class="hero-lede">
+            zoganはHonoとPreactに、明示的なPageとFragment
+            response、必須のcache境界、lazyな型付きIslandを提供します。リンク、フォーム、ナビゲーション、履歴の所有者はブラウザのままです。
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#quick-start">使い始める</a>
+            <a class="button button-secondary" href="#model">モデルを見る <span>↓</span></a>
+          </div>
+        </div>
+
+        <div
+          class="protocol-window"
+          aria-label="サーバーからブラウザへ返す明示的なFragment response"
+          data-reveal
+        >
+          <div class="window-bar">
+            <span></span><span></span><span></span><small>fragment.html</small>
+          </div>
+          <div class="request-line">
+            <span>ROUTE</span>
+            <code>GET /fragments/cart-badge</code>
+          </div>
+          <pre><code><span class="dim">HTTP/1.1 200 OK</span>
+<span class="purple">Cache-Control:</span> private, no-store
+<span class="purple">Vary:</span> Cookie
+
+&lt;a href=<span class="green">"/cart"</span>&gt;
+  Cart &lt;strong&gt;2&lt;/strong&gt;
+&lt;/a&gt;</code></pre>
+          <div class="validation-line">
+            <i></i><span>route</span><i></i><span>cache</span><i></i><span>fallback</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="premise section" id="why">
+        <div class="section-label">01 / 目的</div>
+        <div class="premise-copy" data-reveal>
+          <h2>HTML境界を小さく、明確な契約にする。</h2>
+          <p>
+            1つのURLには1つの表現だけを持たせます。Pageはdocument、Fragmentは専用route、Islandは明示的なownerです。serverとbrowserが別のnavigation
+            modelを同期する必要はありません。
+          </p>
+        </div>
+        <dl class="ownership" data-reveal>
+          <div>
+            <dt>アプリケーションが所有</dt>
+            <dd>route、data、認可、mutation、domain state</dd>
+          </div>
+          <div>
+            <dt>ブラウザが所有</dt>
+            <dd>link、form、redirect、navigation、history</dd>
+          </div>
+          <div>
+            <dt>zoganが所有</dt>
+            <dd>HTML response factory、明示的marker、activation scheduling</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="model section" id="model">
+        <div class="section-heading" data-reveal>
+          <div class="section-label">02 / モデル</div>
+          <h2>4つの明示的な境界。隠し事はない。</h2>
+          <p>各primitiveには1つの役割だけがあります。routeは必要な境界だけを組み合わせます。</p>
+        </div>
+
+        <div class="concept-grid">
+          <article class="concept concept-cache" data-reveal>
+            <span class="concept-index">C</span>
+            <div>
+              <h3>Cache</h3>
+              <p>すべてのHTML responseに検証済みのopaque CachePolicyが必要です。</p>
+            </div>
+            <code>publicCache({ sMaxAge: 60 })</code>
+          </article>
+          <article class="concept concept-page" data-reveal>
+            <span class="concept-index">P</span>
+            <div>
+              <h3>Page</h3>
+              <p>doctypeと任意のapplication layoutを持つ完全なdocumentです。</p>
+            </div>
+            <code>zogan.page(c, view, { cache })</code>
+          </article>
+          <article class="concept concept-fragment" data-reveal>
+            <span class="concept-index">F</span>
+            <div>
+              <h3>Fragment</h3>
+              <p>専用routeのraw HTMLを1つのFragmentSlotへ配置します。</p>
+            </div>
+            <code>&lt;FragmentSlot src="/fragments/cart" /&gt;</code>
+          </article>
+          <article class="concept concept-island" data-reveal>
+            <span class="concept-index">I</span>
+            <div>
+              <h3>Island</h3>
+              <p>server fallback、JSON props、triggerで読み込む型付きcomponentです。</p>
+            </div>
+            <code>&lt;Island of={counter} props={...} /&gt;</code>
+          </article>
+        </div>
+      </section>
+
+      <section class="contract section">
+        <div class="contract-copy" data-reveal>
+          <div class="section-label">03 / 明示的な契約</div>
+          <h2>先に宣言する。<br />その後で拡張する。</h2>
+          <p>
+            Cache、Fragment target、Island ownership、lazy component lookupがapplication
+            codeに現れます。契約を証明できない拡張では、server-rendered fallbackが残ります。
+          </p>
+        </div>
+        <ol class="checks" data-reveal>
+          <li><span>01</span> 表現ごとに1つの通常のHono route</li>
+          <li><span>02</span> すべてのHTML responseにCachePolicy</li>
+          <li><span>03</span> root-relativeでsame-originなFragment source</li>
+          <li><span>04</span> Island propsはplain JSON object</li>
+          <li><span>05</span> descriptor IDとlazy-loader IDを一致</li>
+        </ol>
+      </section>
+
+      <section class="quick-start section" id="quick-start">
+        <div class="section-heading" data-reveal>
+          <div class="section-label">04 / クイックスタート</div>
+          <h2>2つのresponse factory。通常のroute。</h2>
+          <p>各responseでcacheを宣言し、必要なFragmentSlotとIslandだけを追加します。</p>
+        </div>
+        <div class="install-command" data-reveal>
+          <span aria-hidden="true">$</span>
+          <code>pnpm add zogan hono preact</code>
+          <button
+            type="button"
+            data-copy="pnpm add zogan hono preact"
+            data-copy-idle="コピー"
+            data-copy-success="コピーしました"
+            data-copy-failure="選択してコピー"
+            aria-label="インストールコマンドをコピー"
+          >
+            コピー
+          </button>
+        </div>
+        <div class="code-pair">
+          <article class="code-card" data-reveal>
+            <header><span>server.tsx</span><small>明示的なHTML route</small></header>
+            <pre><code><span class="purple">import</span> { createZogan, FragmentSlot, publicCache } <span class="purple">from</span> <span class="green">"zogan"</span>;
+
+app.get(<span class="green">"/"</span>, (c) =&gt; zogan.page(
+  c,
+  &lt;FragmentSlot src=<span class="green">"/fragments/cart"</span>&gt;
+    &lt;a href=<span class="green">"/cart"</span>&gt;Cart —&lt;/a&gt;
+  &lt;/FragmentSlot&gt;,
+  { cache: publicCache({ sMaxAge: 60 }) },
+));</code></pre>
+          </article>
+          <article class="code-card" data-reveal>
+            <header><span>Island + client.ts</span><small>型付きでlazy</small></header>
+            <pre><code><span class="purple">const</span> counter = defineIsland&lt;CounterProps&gt;({
+  id: <span class="green">"Counter"</span>, component: Counter,
+});
+
+&lt;Island of={counter} props={{ initial: 0 }}
+  trigger=<span class="green">"visible"</span> /&gt;
+
+<span class="dim">// browser entry</span>
+start({ islands });
+startFragments();</code></pre>
+          </article>
+        </div>
+      </section>
+
+      <section class="examples section" id="examples">
+        <div class="section-heading" data-reveal>
+          <div class="section-label">05 / 例</div>
+          <h2>コードから始める。</h2>
+          <p>実際の利用例はrepositoryのサンプルとテストで確認できます。</p>
+        </div>
+        <div class="example-grid">
+          <article class="example-card" data-reveal>
+            <div>
+              <span class="example-kicker">Denoコードサンプル</span>
+              <h3>Page、Fragment、typed Island。</h3>
+              <p>
+                HonoとPreactでzoganを使うコードと、HTML、cache境界、representationを確認するDenoテストを用意しています。
+              </p>
+            </div>
+            <div class="example-command">
+              <code>deno task check<br />deno task test</code>
+            </div>
+          </article>
+          <article class="example-card example-card-secondary" data-reveal>
+            <div>
+              <span class="example-kicker">Workers + D1 shop</span>
+              <h3>公開ページ。privateなcart HTML。</h3>
+              <p>
+                nativeなfilter、pagination、POST/Redirect/GETに、必要な部分だけFragmentとIslandを加えます。
+              </p>
+            </div>
+            <div class="example-command"><code>pnpm exec vp run @zogan/shop#dev</code></div>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>zogan / 明示的なHTMLレスポンス</span>
+      <a href="../" lang="en">English</a>
+    </footer>
+
+    <script type="module" src="../src/main.ts"></script>
+  </body>
+</html>

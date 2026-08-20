@@ -69,8 +69,8 @@
 ## サンプルとブラウザ
 
 - `vp run demo:check`: Shop の production build、生成済み Cloudflare binding 型、Workerd + D1 integration tests
-- `vp run ci:browser`: 紹介サイト、Shop、Deno サンプルの Chromium E2E と Cloudflare dry-run
-- Shop と Deno は JavaScript 有効／無効の両 project で native document navigation を検証
+- `vp run ci:browser`: 紹介サイトとShopのChromium E2E、Cloudflare dry-run
+- ShopはJavaScript有効／無効の両projectでnative document navigationを検証。DenoはDeno testでコードサンプルを検証する
 - Shop は native form + PRG と app-owned JSON enhancement、private cart Fragment、stock Fragment を検証
 - production build は Island 実装を初期 entry に static import せず、使用する Island ごとの lazy chunk を生成。Shop E2E は対応markerがないdocumentで `AddToCart` chunkが取得されないことをnetwork request単位で検証する
 
@@ -78,7 +78,7 @@
 
 コマンド：`vp run ci:deno`、`vp run ci:node-current`
 
-- Deno 2.9+ で server／client／Vite source とサンプルを type check・test・build
+- Deno 2.9+ で server／client／Vite source とコードサンプルを type check・test
 - 一時 Deno consumer から npm tarball の四 entry と vNext API／型を検証
 - npm／JSR の runtime export を比較し、publish file boundary と import map を検査
 - `deno doc --lint` と `deno publish --dry-run` を実行。Hono augmentation を廃止したため `--allow-slow-types` は使わず、peer typeとopaque symbolに由来する既知のprivate-type-refだけを名前単位で検査する

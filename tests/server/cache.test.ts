@@ -39,6 +39,10 @@ describe("CachePolicy", () => {
     });
   });
 
+  test("factory 外で偽造した policy を拒否する", () => {
+    expect(() => cachePolicyState({} as CachePolicy)).toThrow(/invalid CachePolicy/i);
+  });
+
   test.each([
     [{ maxAge: -1 }, "maxAge"],
     [{ maxAge: 1.5 }, "maxAge"],

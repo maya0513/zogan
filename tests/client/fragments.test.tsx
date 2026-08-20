@@ -7,30 +7,7 @@ import {
   scanFragments,
   startFragments,
 } from "../../src/client/fragments";
-
-class FakeIntersectionObserver {
-  static instances: FakeIntersectionObserver[] = [];
-  disconnected = false;
-  readonly targets: Element[] = [];
-
-  constructor(
-    private readonly callback: (entries: { isIntersecting: boolean; target: Element }[]) => void,
-  ) {
-    FakeIntersectionObserver.instances.push(this);
-  }
-
-  observe(target: Element) {
-    this.targets.push(target);
-  }
-
-  disconnect() {
-    this.disconnected = true;
-  }
-
-  enter() {
-    this.callback(this.targets.map((target) => ({ target, isIntersecting: true })));
-  }
-}
+import { FakeIntersectionObserver } from "../helpers/intersection-observer";
 
 const htmlResponse = (body: string, init: ResponseInit = {}) => {
   const headers = new Headers(init.headers);
@@ -96,6 +73,29 @@ describe("read-only Fragment runtime", () => {
     expect(document.body.textContent).toBe("ab");
   });
 
+  test("two disjoint roots fetch and dispose independently", async () => {
+    const fetchMock = vi.fn(async () => htmlResponse("fresh"));
+    vi.stubGlobal("fetch", fetchMock);
+    document.body.innerHTML =
+      `<section id="one">${slot("/shared", "one fallback")}</section>` +
+      `<section id="two">${slot("/shared", "two fallback")}</section>`;
+    const one = document.querySelector("#one")!;
+    const two = document.querySelector("#two")!;
+
+    const oneRuntime = startFragments({ root: one });
+    const twoRuntime = startFragments({ root: two });
+
+    await vi.waitFor(() => expect(document.body.textContent).toBe("freshfresh"));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    oneRuntime.dispose();
+    expect(one.textContent).toBe("one fallback");
+    expect(two.textContent).toBe("fresh");
+
+    twoRuntime.dispose();
+    expect(two.textContent).toBe("two fallback");
+  });
+
   test("visible, idle, and media triggers stay deferred", async () => {
     let idle: (() => void) | undefined;
     const mediaListeners: ((event: { matches: boolean }) => void)[] = [];
@@ -158,6 +158,22 @@ describe("read-only Fragment runtime", () => {
 
     await new Promise((done) => setTimeout(done, 0));
     expect(element.textContent).toBe("fallback");
+  });
+
+  test("dispose restores the fallback captured immediately before replacement", async () => {
+    let resolve: ((response: Response) => void) | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => new Promise<Response>((done) => (resolve = done))),
+    );
+    const element = setBody(slot("/late"))[0]!;
+    const runtime = startFragments({ root: element });
+    element.innerHTML = '<span data-owner="external">updated</span>';
+    resolve?.(htmlResponse("fresh"));
+
+    await vi.waitFor(() => expect(element.textContent).toBe("fresh"));
+    runtime.dispose();
+    expect(element.innerHTML).toBe('<span data-owner="external">updated</span>');
   });
 
   test.each([

@@ -14,13 +14,7 @@ const fail = (message) => {
 if (deno.name !== "@maya0513/zogan") fail("unexpected JSR package name");
 if (deno.version !== npm.version) fail("npm and JSR versions differ");
 if (denoExample.dependencies?.zogan !== "workspace:*") {
-  fail("Deno example must resolve zogan through the pnpm workspace in Node tooling");
-}
-if (deno.deploy?.org !== "maya0513" || deno.deploy?.app !== "zogan-deno") {
-  fail("Deno Deploy organization and application must be present in deno.json");
-}
-if (deno.deploy?.install !== "deno install --frozen --node-modules-dir=manual") {
-  fail("Deno Deploy must install a node_modules directory for the Vite build");
+  fail("Deno code sample must resolve zogan through the pnpm workspace in Node tooling");
 }
 
 const expectedExports = {
@@ -67,10 +61,4 @@ for (const path of walk(join(root, "src"))) {
   }
 }
 
-const clientBundle = readFileSync(join(root, "examples/deno/dist/client.js"), "utf8");
-const forbidden = ["node:", "process.cwd(", "require("];
-for (const token of forbidden) {
-  if (clientBundle.includes(token)) fail(`browser bundle contains ${JSON.stringify(token)}`);
-}
-
-console.log("Deno manifest, publish boundary, imports, and browser bundle are consistent");
+console.log("Deno manifest, publish boundary, and imports are consistent");

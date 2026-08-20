@@ -10,6 +10,7 @@ export interface StartOptions {
 
 /** Handle for cancelling pending work and restoring server fallbacks. */
 export interface ClientRuntime {
+  /** Stop this runtime and restore the DOM it owns. */
   dispose(): void;
 }
 

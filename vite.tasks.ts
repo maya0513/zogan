@@ -82,7 +82,6 @@ export const tasks = {
     command: [
       "vp run @zogan/site#e2e",
       "vp run @zogan/shop#e2e",
-      "vp run @zogan/deno-example#e2e",
       "vp run @zogan/site#deploy:dry",
       "vp run @zogan/shop#deploy:dry",
     ],
@@ -96,10 +95,8 @@ export const tasks = {
       "deno task deno:check",
       "deno task deno:test",
       "node scripts/check-deno-package.mjs",
-      "deno task deno:example:build",
       "node scripts/check-deno-contract.mjs",
       "deno task deno:jsr",
-      "vp run @zogan/deno-example#e2e",
     ],
     cache: false,
   },

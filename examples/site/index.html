@@ -41,6 +41,7 @@
         <a href="#model">Model</a>
         <a href="#quick-start">Quick start</a>
         <a href="#examples">Examples</a>
+        <a class="language-link" href="./ja/" lang="ja">日本語</a>
       </nav>
 
       <span class="status">pre-release</span>
@@ -191,6 +192,9 @@
           <button
             type="button"
             data-copy="pnpm add zogan hono preact"
+            data-copy-idle="Copy"
+            data-copy-success="Copied"
+            data-copy-failure="Select and copy"
             aria-label="Copy install command"
           >
             Copy
@@ -306,17 +310,15 @@ app.get(<span class="green">"/fragments/cart"</span>, (c) =&gt;
         </article>
         <article class="example-card example-card-secondary" data-reveal>
           <div>
-            <span class="example-kicker">Deno example</span>
-            <h3>Page, Fragment, hydrate, and mount.</h3>
+            <span class="example-kicker">Deno code sample</span>
+            <h3>Page, Fragment, Cache, and typed Island.</h3>
             <p>
-              The Deno application uses the same explicit response helpers, a one-shot
-              FragmentSlot, and both server-hydrated and client-only typed Islands.
+              The Deno sample is source and test documentation: it uses explicit response helpers,
+              a one-shot FragmentSlot, a typed Island, and Deno tests for the rendered contract.
             </p>
           </div>
           <div class="example-command">
-            <code
-              >deno task deno:example:build<br />deno task deno:example:start</code
-            >
+            <code>deno task check<br />deno task test</code>
           </div>
         </article>
       </section>

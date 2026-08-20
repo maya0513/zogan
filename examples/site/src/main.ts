@@ -16,6 +16,9 @@ const copyWithSelection = (value: string): boolean => {
   return copied;
 };
 
+const copyLabel = (button: HTMLButtonElement, name: string, fallback: string): string =>
+  button.dataset[name] ?? fallback;
+
 const copyInstallCommand = async (button: HTMLButtonElement): Promise<void> => {
   const value = button.dataset.copy;
   if (!value) return;
@@ -24,14 +27,14 @@ const copyInstallCommand = async (button: HTMLButtonElement): Promise<void> => {
     await navigator.clipboard.writeText(value);
   } catch {
     if (!copyWithSelection(value)) {
-      button.textContent = "Select and copy";
+      button.textContent = copyLabel(button, "copyFailure", "Select and copy");
       return;
     }
   }
 
-  button.textContent = "Copied";
+  button.textContent = copyLabel(button, "copySuccess", "Copied");
   window.setTimeout(() => {
-    button.textContent = "Copy";
+    button.textContent = copyLabel(button, "copyIdle", "Copy");
   }, 1800);
 };
 
@@ -41,12 +44,14 @@ copyButton?.addEventListener("click", () => {
 
 const navigation = document.querySelector<HTMLElement>("[data-navigation]");
 const navigationToggle = document.querySelector<HTMLButtonElement>("[data-navigation-toggle]");
+const navigationLabel = (name: string, fallback: string): string =>
+  navigationToggle?.dataset[name] ?? fallback;
 
 const closeNavigation = (): void => {
   if (!navigation || !navigationToggle) return;
   navigation.dataset.open = "false";
   navigationToggle.setAttribute("aria-expanded", "false");
-  navigationToggle.setAttribute("aria-label", "Open navigation");
+  navigationToggle.setAttribute("aria-label", navigationLabel("labelOpen", "Open navigation"));
 };
 
 navigationToggle?.addEventListener("click", () => {
@@ -54,7 +59,12 @@ navigationToggle?.addEventListener("click", () => {
   const open = navigation.dataset.open !== "true";
   navigation.dataset.open = String(open);
   navigationToggle.setAttribute("aria-expanded", String(open));
-  navigationToggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+  navigationToggle.setAttribute(
+    "aria-label",
+    open
+      ? navigationLabel("labelClose", "Close navigation")
+      : navigationLabel("labelOpen", "Open navigation"),
+  );
 });
 
 navigation

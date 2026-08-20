@@ -157,7 +157,7 @@ export default defineConfig({
       },
       {
         files: [
-          "examples/deno/server.tsx",
+          "examples/deno/src/sample.tsx",
           "examples/deno/tests/**/*.{ts,tsx}",
           "tests/deno/**/*.{ts,tsx}",
         ],
@@ -294,10 +294,10 @@ export default defineConfig({
         functions: 95,
         branches: 90,
         "src/server/cache.ts": {
-          statements: 95,
-          lines: 95,
+          statements: 98,
+          lines: 100,
           functions: 100,
-          branches: 95,
+          branches: 97,
         },
         "src/server/zogan.ts": {
           statements: 100,
@@ -310,6 +310,36 @@ export default defineConfig({
           lines: 100,
           functions: 100,
           branches: 100,
+        },
+        "src/client/dom.ts": {
+          statements: 97,
+          lines: 100,
+          functions: 100,
+          branches: 91,
+        },
+        "src/client/islands.ts": {
+          statements: 94,
+          lines: 97,
+          functions: 96,
+          branches: 92,
+        },
+        "src/client/protocol.ts": {
+          statements: 90,
+          lines: 94,
+          functions: 100,
+          branches: 84,
+        },
+        "src/client/triggers.ts": {
+          statements: 95,
+          lines: 94,
+          functions: 92,
+          branches: 90,
+        },
+        "src/server/fragment-slot.ts": {
+          statements: 100,
+          lines: 100,
+          functions: 100,
+          branches: 96,
         },
         "src/vite/client-only.ts": {
           statements: 100,

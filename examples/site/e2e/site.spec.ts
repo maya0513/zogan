@@ -19,6 +19,23 @@ test("presents the library and a usable quick start", async ({ page }) => {
   await expect(copyButton).toHaveText("Copied");
 });
 
+test("defaults to the English page and links to Japanese", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page).toHaveTitle(/explicit HTML responses/);
+  await expect(page.getByRole("link", { name: "日本語" })).toHaveAttribute("href", "./ja/");
+});
+
+test("provides the Japanese page with a link back to English", async ({ page }) => {
+  await page.goto("/ja/");
+
+  await expect(page.locator("html")).toHaveAttribute("lang", "ja");
+  await expect(page).toHaveTitle(/HonoとPreact/);
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("ページを描画する");
+  await expect(page.getByRole("link", { name: "English" }).first()).toHaveAttribute("href", "../");
+});
+
 test("mobile navigation exposes the page sections", async ({ page, isMobile }) => {
   test.skip(!isMobile, "mobile navigation check");
   await page.goto("/");

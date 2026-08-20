@@ -26,7 +26,7 @@ module importだけではDOMへ触れない。DOMのないserver/Deno環境で�
 
 runtimeはmodule-globalなdocument singletonではない。互いに重ならないrootへ複数instanceを開始できる。各instanceは開始時に存在するmarkerだけをscanし、`MutationObserver`や公開rescan APIを持たない。
 
-`dispose()`はpending triggerと所有するPreact rootを停止し、runtimeが置換または起動した領域を開始前のserver fallbackへ戻す。dispose後に到着したnetwork/module結果はDOMへ適用しない。同じhandleを複数回disposeしても安全である。
+`dispose()`はpending triggerと所有するPreact rootを停止し、runtimeが置換または起動した領域をDOM変更直前にcloneしたchildrenへ戻す。dispose後に到着したnetwork/module結果はDOMへ適用しない。同じhandleを複数回disposeしても安全である。
 
 同じmarkerを複数runtimeで同時に所有する使い方はcontract外である。Viteの`virtual:zogan/islands`は開始済みruntimeを`runtime`としてexportするので、applicationはそのhandleをlifecycleへ組み込める。
 
@@ -57,13 +57,13 @@ Fragment runtimeはURL、protocol marker、予約attribute、wrapper、ownership
 
 response適用時は接続、runtime token、src/trigger/protocol snapshot、予約attribute、ownerを再確認する。古いresponse、削除済みtarget、marker変更済みelement、未知の`data-zogan-*`が追加されたelement、待機中に別boundary配下へ移動したelementを更新しない。
 
-Fragment responseにFragmentまたはIsland markerがあればresponse全体を拒否する。wrapper elementは残し、childrenだけをcontextual parserで一度置換する。挿入した内容を再scanしない。
+Fragment responseに予約済み`data-zogan-*`属性が一つでもあればresponse全体を拒否する。これにはFragment/Island markerと将来versionの未知属性も含む。wrapper elementは残し、childrenだけをcontextual parserで一度置換する。挿入した内容を再scanしない。
 
 ## 6.6 Island runtime
 
 Island loaderはtrigger発火後にだけ呼ぶ。runtimeごとにID単位でmodule Promiseをmemoizeし、default exportがPreact componentであることを検査する。module待機後にもowner、protocol、予約attribute、ID/mode/trigger/raw propsのsnapshotを再確認する。
 
-`hydrate` はserver childrenをPreactへ接続する。`mount` はserver fallbackを消してclient componentをrenderする。activation前のchildrenをcloneし、同期的なrender failureまたはdisposeでは復元する。
+`hydrate` はserver childrenをPreactへ接続する。`mount` はserver fallbackを消してclient componentをrenderする。runtimeがDOMを変更する直前のchildrenをcloneし、同期的なrender failureまたはdisposeでは復元する。
 
 `div`以外のwrapper、不正ID、欠落loader、欠落・壊れたprops、欠落・未知mode、欠落・未知trigger、module failure、削除済みtargetではserver DOMを維持する。Island内のFragmentとnested Islandは拒否する。
 
@@ -75,7 +75,7 @@ runtimeが持つのは局所的な短命stateだけである。
 
 - URLごとのin-flight Fragment Promise
 - IDごとのIsland module Promise
-- elementごとのclaim、activation token、開始前fallback
+- elementごとのclaim、activation token、DOM変更直前のfallback
 - pending trigger cleanup
 
 application data、current route、form state、history snapshot、Fragment responseの永続cacheは持たない。request timeout、abort、自動retry、backoffも実装しない。

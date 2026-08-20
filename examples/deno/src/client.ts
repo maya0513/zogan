@@ -1,8 +1,15 @@
-import type { IslandLoader } from "zogan/client";
-import { startFragments } from "zogan/fragments";
-import { islands } from "virtual:zogan/islands";
+import { start, type ClientRuntime, type IslandLoader } from "zogan/client";
+import { startFragments, type FragmentClientRuntime } from "zogan/fragments";
 
-const islandLoaders: Readonly<Record<string, IslandLoader>> = islands;
+const islands: Readonly<Record<string, IslandLoader>> = {
+  PageStatus: () => import("./islands/PageStatus.tsx"),
+};
 
-void islandLoaders;
-startFragments();
+/** Start the two explicit browser runtimes and return both lifecycle handles. */
+export const startSampleEnhancements = (): {
+  readonly islands: ClientRuntime;
+  readonly fragments: FragmentClientRuntime;
+} => ({
+  islands: start({ islands }),
+  fragments: startFragments(),
+});

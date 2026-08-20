@@ -191,7 +191,7 @@ policyの`Vary`名は、Hono contextにすでにある値と大文字小文字�
 
 `createZogan({ layout })`はstatelessな`page`と`fragment`のresponse factoryを返します。ルートの登録やHonoの変更は行いません。Pageは任意のlayoutを使いdoctypeから始まり、Fragmentはlayoutを使わない生のHTMLです。
 
-各Fragmentには、root-relativeかつsame-originな専用URLを与えます。`<FragmentSlot>`はchildrenを有用なserver fallbackとしてレンダリングし、opt-inの`zogan/fragments` runtimeがそのURLを`load`、`idle`、`visible`、`media:…`のいずれかで一度だけ取得します。既定値は`load`です。Fragment responseは別のFragmentまたはIsland markerを含められません。
+各Fragmentには、root-relativeかつsame-originな専用URLを与えます。`<FragmentSlot>`はchildrenを有用なserver fallbackとしてレンダリングし、opt-inの`zogan/fragments` runtimeがそのURLを`load`、`idle`、`visible`、`media:…`のいずれかで一度だけ取得します。既定値は`load`です。Fragment responseは、Fragment/Island markerを含む予約済み`data-zogan-*`属性を一つも含められません。
 
 ### 型付きIsland
 
@@ -205,7 +205,7 @@ descriptorはserver renderingと`<Island>` propsをcompile timeに検査しま�
 
 zoganはリンクやフォームをinterceptせず、ブラウザ履歴を管理しません。完全なPageを作り、通常のform actionを使い、変更成功後はPOST/Redirect/GETなどでredirectしてください。JavaScriptが無効でもアプリケーションは利用できます。
 
-FragmentとIslandの拡張はfail-closedです。不正なURL、redirect、失敗status、誤ったcontent type、protocol不一致、loader error、render errorが起きた場合、server fallbackを維持または復元します。ownerのnestはserver render時に拒否されます。
+FragmentとIslandの拡張はfail-closedです。不正なURL、redirect、失敗status、誤ったcontent type、protocol不一致、loader error、render errorが起きた場合、server fallbackを維持または復元します。Fragment response内の境界とIsland内の境界はserver render時に拒否します。通常Pageまたはstale/raw markupに別のownerがnestしている場合はbrowser runtimeが拒否します。
 
 対話的なIslandは、native formをアプリケーションのJSON endpointで拡張できます。成功後に他領域を同期する必要がある場合は、完全なPageへ遷移してserver stateを再取得します。POSTの通信失敗はserver commit前の失敗とcommit後の応答喪失を区別できないため、request dispatch後にnative formを自動再送しません。
 
@@ -221,9 +221,9 @@ try {
 
 ## サンプル
 
-- [紹介サイト](examples/site) — Cache、Page、Fragment、Islandのモデルをひと目で確認できるサイト
+- [紹介サイト](examples/site) — 英語を既定とし、日本語ページも用意したCache、Page、Fragment、Islandの紹介
 - [Workers + D1 shop](examples/shop) — 公開product Page、privateなcart HTML、nativeなfilterおよびmutation flow、任意のAdd-to-Cart Island
-- [Denoサンプル](examples/deno) — 明示的なPageおよびFragmentルートとhydrate Island。[公開デモ](https://zogan-deno.maya0513.deno.net)
+- [Denoコードサンプル](examples/deno) — 明示的なPage、Fragment、Cache、型付きIslandを使うHono/PreactコードとDenoテスト
 
 ## ドキュメント
 
@@ -236,7 +236,7 @@ try {
 - Hono `>=4.13.0 <5`
 - Preact `>=10.29.8 <11`
 - `zogan/vite`を使う場合はVite `^8.0.0`（任意）
-- JSRパッケージとDenoサンプルはDeno 2.9以降
+- JSRパッケージとDenoコードサンプルはDeno 2.9以降
 - npmの開発とpackage作成にはNode.js 24.11以降
 - Honoが対応するWeb標準ベースのserver runtime
 - ESMのみ

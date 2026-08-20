@@ -41,12 +41,12 @@ pnpm exec vp run ci:quality
 - SSRだけでlink、form、Fragment fallbackが利用できる。
 - Fragmentのnetwork/status/media-type/redirect/parser前検証失敗で既存childrenを維持する。
 - 同じURLの同時取得、複数slotへのfan-out、削除済みtarget、待機中のownership/marker変更を検証する。
-- Fragment response内のFragment/Island markerを拒否し、挿入内容を再scanしない。
+- Fragment response内の予約済み`data-zogan-*`属性を拒否し、挿入内容を再scanしない。
 - `tbody`、`tr`、`select`、`optgroup`を含むcontextual parsingを検証する。
-- runtime handleのdisposeがpending workを止め、開始前のserver fallbackを復元する。
+- runtime handleのdisposeがpending workを止め、runtimeのDOM変更直前に取得したfallbackを復元する。
 - Island moduleはtrigger前にloadされず、同じIDのin-flight/successを共有し、rejection後はretryできる。
 - `div`以外のIsland wrapper、不正ID、loader、再帰的finite JSON props、必須mode、必須trigger、待機中のID/mode/trigger/raw props変更、Preact activationの失敗でSSR/fallbackを維持する。
-- Fragment/Islandのnestをserver renderとclient runtimeの双方で拒否する。同一elementのdual marker、protocol不一致、boundary allowlist外の`data-zogan-*`はasync処理の前後で拒否する。
+- Island内部とFragment response内のnestをserver renderで拒否し、通常Pageまたはraw/stale DOMのnested ownerをclient runtimeで拒否する。同一elementのdual marker、protocol不一致、boundary allowlist外の`data-zogan-*`はasync処理の前後で拒否する。
 
 ### Vite/package
 
@@ -64,9 +64,14 @@ V8 coverageのglobal thresholdはstatements/lines/functionsが95%、branchesが9
 
 | File | Statements | Lines | Functions | Branches |
 |---|---:|---:|---:|---:|
-| `src/server/cache.ts` | 95% | 95% | 100% | 95% |
+| `src/server/cache.ts` | 98% | 100% | 100% | 97% |
 | `src/server/zogan.ts` | 100% | 100% | 100% | 100% |
 | `src/client/fragments.ts` | 100% | 100% | 100% | 100% |
+| `src/client/dom.ts` | 97% | 100% | 100% | 91% |
+| `src/client/islands.ts` | 94% | 97% | 96% | 92% |
+| `src/client/protocol.ts` | 90% | 94% | 100% | 84% |
+| `src/client/triggers.ts` | 95% | 94% | 92% | 90% |
+| `src/server/fragment-slot.ts` | 100% | 100% | 100% | 96% |
 | `src/vite/client-only.ts` | 100% | 100% | 100% | 90% |
 | `src/vite/islands-entry.ts` | 100% | 100% | 100% | 100% |
 
